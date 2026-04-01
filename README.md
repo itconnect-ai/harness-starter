@@ -17,29 +17,17 @@
 
 ### 2. BMAD 업데이트
 
-프로젝트 루트에서 실행합니다. 
+프로젝트 루트에서 실행합니다. 최신버전일 경우 업데이트가 필요없습니다.
 
 ```bash
 npx bmad-method install
 ```
-
-최신버전일 경우 업데이트가 필요없습니다.
 
 ### 3. BMAD 기획/설계 실행 (Claude Code)
 
 하네스 파일은 아직 템플릿 상태입니다. 먼저 BMAD로 기획/설계를 완료해야 합니다.
 기획이 끝나야 기술 스택, 아키텍처 레이어, 빌드 명령이 확정되고,
 그래야 하네스 파일을 프로젝트에 맞게 수정할 수 있습니다.
-
-```bash
-claude
-# → bmad-help
-# → Analysis (선택): bmad-brainstorming, bmad-product-brief
-# → Planning (필수): bmad-create-prd → PRD.md 생성
-# → Solutioning (필수): bmad-create-architecture → architecture.md 생성
-# → bmad-create-epics-and-stories → epics/stories 생성
-# → bmad-check-implementation-readiness → 정합성 확인
-```
 
 완료 후 아래 산출물이 존재해야 합니다:
 - `_bmad-output/planning-artifacts/PRD.md`
