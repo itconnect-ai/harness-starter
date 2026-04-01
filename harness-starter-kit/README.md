@@ -91,10 +91,11 @@ architecture.md의 기술 스택에 맞게 프로젝트를 초기화해줘.
   - DB 볼륨은 named volume으로 설정
 - Docker를 사용하지 않는다면 이 단계 건너뛰기
 
-## 5단계: CI/CD (선택)
+## 5단계: CI/CD
 - .github/workflows/ci.yml 생성
   - trigger: push to main, PR to main
   - steps: lint → typecheck → test → build → npm audit
+- Phase B에서 main에 merge할 때 마지막 안전망 역할
 
 ## 6단계: 검증
 - scripts/validate.sh를 실행해서 모든 명령이 정상 동작하는지 확인
@@ -282,6 +283,12 @@ spec → implement → review → present를 한 세션에서 처리합니다.
 | `bmad-code-review` | Phase B 프롬프트에 포함 | Phase B | 3층 병렬 리뷰 (Blind + Edge Case + Acceptance) |
 | `bmad-quick-dev` | `bmad-quick-dev` 직접 호출 | Quick Flow | 가벼운 작업용 |
 
+### 자동 (CI/CD — PR/push 시)
+
+| Harness | 트리거 | 설명 |
+|---|---|---|
+| `.github/workflows/ci.yml` | main에 PR 생성 또는 push 시 | lint → typecheck → test → build → audit. Phase B에서 merge할 때 **마지막 안전망** |
+
 ### 규칙 파일 (에이전트가 자동 참조)
 
 | 규칙 파일 | Phase A | Phase B | 검증 시점 |
@@ -307,34 +314,4 @@ spec → implement → review → present를 한 세션에서 처리합니다.
 .env
 .env.local
 config/local.yaml
-```
-
-### CI/CD 파이프라인
-
-4단계 통합 프롬프트의 CI/CD 섹션으로 자동 생성하거나, 수동으로:
-
-```yaml
-name: CI
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  quality-gate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run test -- --coverage
-      - run: npm run build
-      - run: npm audit --audit-level=high
-        continue-on-error: true
 ```
