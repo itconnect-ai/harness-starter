@@ -5,6 +5,7 @@
 
 - Claude Code, Codex CLI 설치 및 로그인 완료
 - Git 설정 완료
+- BMAD 설치 완료 (이 레파지토리에 포함됨)
 - jq 설치 완료 (`brew install jq` 또는 `sudo apt-get install -y jq`)
 - Node.js 20+
 
@@ -12,15 +13,15 @@
 
 ## 셋업 순서
 
-### 1. BMAD 설치
+### 1. BMAD 업데이트
 
-프로젝트 루트에서 실행합니다.
+프로젝트 루트에서 실행합니다. 
 
 ```bash
 npx bmad-method install
 ```
 
-설치 후 `_bmad/`와 `_bmad-output/` 폴더가 생성됩니다.
+최신버전일 경우 업데이트가 필요없습니다.
 
 ### 2. 하네스 키트 복사
 
