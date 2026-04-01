@@ -10,51 +10,115 @@
 # ============================================================================
 set -e
 
-echo "══════════════════════════════════════"
-echo "▶ Validation Start"
-echo "══════════════════════════════════════"
+echo "======================================"
+echo " Validation Start"
+echo "======================================"
 
 # ── 1. 의존성 설치 ──
 echo ""
-echo "▶ [1/5] Install dependencies..."
-npm install --silent 2>/dev/null || {
-  echo "⚠ npm install failed"
+echo "[1/7] Install dependencies..."
+npm install --prefer-offline || {
+  echo "FAIL: npm install failed"
   exit 1
 }
 
 # ── 2. 타입 체크 ──
 echo ""
-echo "▶ [2/5] Type check..."
-npm run typecheck 2>/dev/null || npx tsc --noEmit 2>/dev/null || {
-  echo "⚠ Type check failed"
+echo "[2/7] Type check..."
+npm run typecheck 2>&1 || npx tsc --noEmit 2>&1 || {
+  echo "FAIL: Type check failed"
   exit 1
 }
 
 # ── 3. 린트 ──
 echo ""
-echo "▶ [3/5] Lint..."
-npm run lint 2>/dev/null || {
-  echo "⚠ Lint failed"
+echo "[3/7] Lint..."
+npm run lint 2>&1 || {
+  echo "FAIL: Lint failed"
   exit 1
 }
 
 # ── 4. 테스트 ──
 echo ""
-echo "▶ [4/5] Tests..."
-npm run test 2>/dev/null || {
-  echo "⚠ Tests failed"
+echo "[4/7] Tests..."
+npm run test 2>&1 || {
+  echo "FAIL: Tests failed"
   exit 1
 }
 
 # ── 5. 빌드 ──
 echo ""
-echo "▶ [5/5] Build..."
-npm run build 2>/dev/null || {
-  echo "⚠ Build failed"
+echo "[5/7] Build..."
+npm run build 2>&1 || {
+  echo "FAIL: Build failed"
   exit 1
 }
 
+# ── 6. 보안 체크 ──
 echo ""
-echo "══════════════════════════════════════"
-echo "✅ Validation PASSED"
-echo "══════════════════════════════════════"
+echo "[6/7] Security checks..."
+SECURITY_WARNINGS=0
+
+# 하드코딩된 시크릿 패턴 감지
+if grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
+  -iE "(api[_-]?key|secret|password|token)\s*[:=]\s*['\"][a-zA-Z0-9]{8,}" src/ 2>/dev/null | \
+  grep -v "process\.env\|\.env\.\|\.example\|test\|mock\|fake\|dummy" ; then
+  echo "WARNING: Possible hardcoded secret detected in source code"
+  SECURITY_WARNINGS=$((SECURITY_WARNINGS+1))
+fi
+
+# .env 파일이 git에 추가되었는지
+if git diff --cached --name-only 2>/dev/null | grep -E "^\.env(\.\w+)?$" | grep -v "\.example" ; then
+  echo "WARNING: .env file staged for commit"
+  SECURITY_WARNINGS=$((SECURITY_WARNINGS+1))
+fi
+
+# docker-compose down -v 패턴 (DB 데이터 삭제 위험)
+if grep -rn "down -v\|down --volumes" scripts/ 2>/dev/null; then
+  echo "WARNING: 'docker-compose down -v' found in scripts (destroys DB data)"
+  SECURITY_WARNINGS=$((SECURITY_WARNINGS+1))
+fi
+
+if [ $SECURITY_WARNINGS -gt 0 ]; then
+  echo "Security check: $SECURITY_WARNINGS warning(s) found"
+else
+  echo "Security check: PASSED"
+fi
+
+# ── 7. 성능 체크 ──
+echo ""
+echo "[7/7] Performance checks..."
+PERF_WARNINGS=0
+
+# 바운드 없는 findMany() 감지
+if grep -rn "findMany()" src/ --include="*.ts" 2>/dev/null | grep -v "take:\|limit:\|where:" ; then
+  echo "WARNING: findMany() without take/limit may return unbounded results"
+  PERF_WARNINGS=$((PERF_WARNINGS+1))
+fi
+
+# 전체 lodash import 감지
+if grep -rn "from 'lodash'" src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -v "lodash/" ; then
+  echo "WARNING: Full lodash import; use lodash/specific-function"
+  PERF_WARNINGS=$((PERF_WARNINGS+1))
+fi
+
+# Dockerfile 레이어 순서 체크
+if [ -f Dockerfile ]; then
+  COPY_ALL=$(grep -n "COPY \. " Dockerfile 2>/dev/null | head -1 | cut -d: -f1)
+  NPM_CI=$(grep -n "RUN npm" Dockerfile 2>/dev/null | head -1 | cut -d: -f1)
+  if [ -n "$COPY_ALL" ] && [ -n "$NPM_CI" ] && [ "$COPY_ALL" -lt "$NPM_CI" ]; then
+    echo "WARNING: Dockerfile copies source before npm install (cache-busting)"
+    PERF_WARNINGS=$((PERF_WARNINGS+1))
+  fi
+fi
+
+if [ $PERF_WARNINGS -gt 0 ]; then
+  echo "Performance check: $PERF_WARNINGS warning(s) found"
+else
+  echo "Performance check: PASSED"
+fi
+
+echo ""
+echo "======================================"
+echo " Validation PASSED"
+echo "======================================"

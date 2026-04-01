@@ -63,7 +63,7 @@ BMAD 풀코스 없이 간단한 작업을 할 때:
 - Test: `npm run test`
 - Lint: `npm run lint`
 - Type check: `npm run typecheck`
-- 작업 완료 전 반드시: `npm run lint && npm run typecheck`
+- Validate: `./scripts/validate.sh` (작업 완료 전 필수)
 
 ## 참조 파일
 
@@ -73,3 +73,6 @@ BMAD 풀코스 없이 간단한 작업을 할 때:
 @docs/agents/testing-rules.md
 @docs/agents/coding-rules.md
 @docs/agents/workflow-rules.md
+@docs/agents/security-rules.md
+@docs/agents/performance-rules.md
+@docs/agents/deploy-rules.md

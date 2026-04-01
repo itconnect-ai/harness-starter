@@ -12,36 +12,15 @@
 
 Phase A: Codex Desktop (구현, Epic 단위)
   story마다: bmad-create-story → bmad-dev-story → validate
-  BMAD 스킬 풀 활용, TDD, 무인 가능
 
 Phase B: Claude Code (품질 보장, Epic 단위)
   bmad-code-review → 오류 직접 수정 → 테스트 보강
-  Hooks + Skills + Sub-agent 풀 활용
 ```
 
 ## 사전 조건
 
-- Claude Code CLI 설치 및 로그인 완료
-- Codex Desktop 설치 및 로그인 완료
-- Codex Desktop 모델 설정: chatgpt-5.4, reasoning xhigh
-- Git 설정 완료
-- BMAD 설치 완료 (이 레파지토리에 포함됨)
+- Claude Code CLI, Codex Desktop, Git, Node.js 20+
 - jq 설치 완료 (`brew install jq` 또는 `sudo apt-get install -y jq`)
-- Node.js 20+
-
-### Codex Desktop 모델 설정
-
-Codex Desktop 설정 또는 `~/.codex/config.toml`에서:
-
-```toml
-model = "chatgpt-5.4"
-model_reasoning_effort = "xhigh"
-```
-
-또는 실행 시 플래그:
-```bash
-codex -m chatgpt-5.4 -c model_reasoning_effort=xhigh
-```
 
 ---
 
@@ -52,29 +31,13 @@ codex -m chatgpt-5.4 -c model_reasoning_effort=xhigh
 프로젝트 시작 전 이 레파지토리 전체를 복사하여 붙여넣습니다.
 BMAD와 하네스 파일이 모두 포함되어 있습니다.
 
-### 2단계: BMAD 업데이트
-
-최신 버전일 경우 업데이트가 필요 없습니다.
+### 2단계: BMAD 설치
 
 ```bash
-cd your-project
 npx bmad-method install
 ```
 
 ### 3단계: BMAD 기획/설계 (Claude Code)
-
-```bash
-claude
-```
-
-```
-bmad-help
-→ Analysis (선택): bmad-brainstorming, bmad-product-brief
-→ Planning (필수): bmad-create-prd → PRD.md 생성
-→ Solutioning (필수): bmad-create-architecture → architecture.md 생성
-→ bmad-create-epics-and-stories → epics/stories 생성
-→ bmad-check-implementation-readiness → 정합성 확인
-```
 
 완료 후 아래 산출물이 존재해야 합니다:
 - `_bmad-output/planning-artifacts/PRD.md`
@@ -107,20 +70,33 @@ architecture.md의 기술 스택에 맞게 프로젝트를 초기화해줘.
 - scripts/validate.sh → 실제 빌드/타입체크/린트/테스트 명령으로 교체
 - scripts/smoke.sh → PRD의 핵심 사용자 플로우 기반 스모크 테스트 대상 정의
 - docs/agents/architecture-rules.md → architecture.md의 레이어 구조, 모듈 경계 반영
-- docs/agents/coding-rules.md → 실제 기술 스택에 맞는 규칙
+- docs/agents/coding-rules.md → 실제 기술 스택에 맞는 규칙, 로거 경로 지정
 - docs/agents/testing-rules.md → 실제 테스트 프레임워크, 커버리지 기준
+- docs/agents/security-rules.md → CORS 허용 도메인, 인증 방식에 맞게 조정
+- docs/agents/performance-rules.md → 사용하는 ORM/프레임워크에 맞게 조정
+- docs/agents/deploy-rules.md → 배포 환경(Docker, Vercel, Fly.io 등)에 맞게 조정, 포트 레지스트리 작성
 - AGENTS.md → Repo map의 소스 코드 경로를 실제 구조에 맞게
 
 ## 3단계: Claude Code 환경 업데이트
 - CLAUDE.md의 "Build, Test & Quality" 섹션을 실제 명령으로 갱신
 - .claude/hooks/run-checks.sh의 대상 확장자를 기술 스택에 맞게 조정
 
-## 4단계: CI/CD (선택)
+## 4단계: Docker 환경 (해당 시)
+- Docker를 사용한다면:
+  - dev/docker-compose.dev.yml (개발: 볼륨 마운트, 핫리로드, 디버그 포트)
+  - 루트 docker-compose.yml (운영: restart:always, 리소스 제한, healthcheck)
+  - .dockerignore (node_modules, .git, .env*, coverage)
+  - .env.example (커밋용, 변수 목록만)
+  - 포트는 모두 환경변수 사용: ${PORT:-3000}
+  - DB 볼륨은 named volume으로 설정
+- Docker를 사용하지 않는다면 이 단계 건너뛰기
+
+## 5단계: CI/CD (선택)
 - .github/workflows/ci.yml 생성
   - trigger: push to main, PR to main
   - steps: lint → typecheck → test → build → npm audit
 
-## 5단계: 검증
+## 6단계: 검증
 - scripts/validate.sh를 실행해서 모든 명령이 정상 동작하는지 확인
 ```
 
@@ -147,14 +123,11 @@ Epic 1의 story를 순서대로 처리해.
 - 이전 story의 학습을 다음 story에 반영
 ```
 
-> **무인 실행**: Codex Desktop에서 프롬프트 입력 후 밤새 돌려놓을 수 있습니다.
 > Epic 1이 끝나면 Phase B로 넘어갑니다.
 
 ### 6단계: Phase B — Claude Code로 리뷰 + 수정 (Epic 단위)
 
-```bash
-claude
-```
+Claude Code를 열고 아래 프롬프트를 입력합니다.
 
 ```
 Epic 1의 구현 결과를 리뷰하고 수정해줘.
@@ -213,25 +186,6 @@ bmad-agent-quick-flow-solo-dev
 
 spec → implement → review → present를 한 세션에서 처리합니다.
 
----
-
-## CLI Fallback (Codex Desktop 없이)
-
-Codex Desktop이 아닌 CLI로 Phase A를 실행해야 할 때:
-
-```bash
-# Epic 1 무인 실행 (Codex CLI 사용)
-./scripts/run-epic.sh 1
-
-# Timeout 커스터마이징
-CODEX_TIMEOUT=7200 CODEX_MODEL=chatgpt-5.4 ./scripts/run-epic.sh 1
-
-# 상태 확인
-./scripts/status.sh
-```
-
-> **주의**: CLI 모드에서는 BMAD 스킬(create-story, dev-story)을 사용할 수 없습니다.
-> 단순 프롬프트 기반 구현만 가능하며, Codex Desktop 사용을 권장합니다.
 
 ---
 
@@ -252,16 +206,19 @@ CODEX_TIMEOUT=7200 CODEX_MODEL=chatgpt-5.4 ./scripts/run-epic.sh 1
 │   ├── settings.json                  Hook 설정
 │   ├── hooks/
 │   │   ├── block-rm.sh                위험 명령 차단
-│   │   └── run-checks.sh             편집 후 자동 lint+typecheck
+│   │   └── run-checks.sh              편집 후 자동 lint+typecheck
 │   └── skills/                        Claude Code용 BMAD 스킬 (Phase B)
 │       ├── bmad-code-review/          3층 병렬 코드 리뷰
 │       └── ...
 │
 ├── docs/
 │   ├── agents/
-│   │   ├── architecture-rules.md      아키텍처 경계 규칙
-│   │   ├── coding-rules.md            코드 작성 규칙
+│   │   ├── architecture-rules.md      아키텍처 경계, API 버저닝, health check
+│   │   ├── coding-rules.md            코드 작성, 로깅 표준, 환경변수
 │   │   ├── testing-rules.md           테스트 규칙
+│   │   ├── security-rules.md          보안 (시크릿, 인증, 입력검증, 에러노출)
+│   │   ├── performance-rules.md       성능 (N+1, LIMIT, 이벤트 cleanup)
+│   │   ├── deploy-rules.md            배포 (Docker, 포트, DB 보호, graceful shutdown)
 │   │   └── workflow-rules.md          Phase A/B 작업 흐름
 │   └── decisions/                     ADR
 │
@@ -295,16 +252,44 @@ CODEX_TIMEOUT=7200 CODEX_MODEL=chatgpt-5.4 ./scripts/run-epic.sh 1
 | **Phase A: 구현** | **Codex Desktop** | **create-story, dev-story** | **코드 + 커밋 + story 파일** |
 | **Phase B: 품질 보장** | **Claude Code** | **code-review** | **리뷰 결과 + 수정 + 테스트** |
 
-## Harness Engineering 6요소
+## Harness 작동 매트릭스
 
-| 요소 | Phase A (Codex) | Phase B (Claude) |
-|---|---|---|
-| 문맥 (Context) | AGENTS.md + docs/agents/ + BMAD 스킬 | CLAUDE.md + @imports + REVIEW.md |
-| 권한 (Permissions) | Codex Desktop 샌드박스 | Hooks (block-rm.sh) |
-| 테스트 계약 | bmad-dev-story TDD + validate.sh | bmad-code-review + 테스트 보강 + smoke.sh |
-| Hooks | — | PreToolUse + PostToolUse |
-| Skills | bmad-create-story, bmad-dev-story | bmad-code-review |
-| Review Loop | validate.sh 자체 검증 | bmad-code-review → 수정 → 재검증 |
+모든 harness가 언제, 어떻게 작동하는지 한눈에 확인할 수 있습니다.
+
+### 자동 작동 (사람 개입 불필요)
+
+| Harness | 트리거 | 대상 | 설명 |
+|---|---|---|---|
+| `block-rm.sh` | Claude Code에서 Bash 명령 실행 시 | Phase B | `rm -rf` 등 위험 명령 자동 차단 |
+| `run-checks.sh` | Claude Code에서 Edit/Write 시 | Phase B | lint + typecheck 자동 실행, 실패 시만 노출 |
+| CLAUDE.md @import | Claude Code 세션 시작 시 | Phase B | 모든 규칙 파일(8개) 자동 로드 |
+| AGENTS.md | Codex Desktop 세션 시작 시 | Phase A | 저장소 규칙 자동 로드 |
+| bmad-dev-story TDD | Phase A에서 story 구현 시 | Phase A | red-green-refactor 사이클 강제 |
+| bmad-dev-story DoD | Phase A에서 story 완료 시 | Phase A | 10개 항목 정의 완료 검증 자동 실행 |
+| sprint-status.yaml | bmad 스킬 실행 시 | Phase A | backlog→in-progress→review 자동 업데이트 |
+
+### 프롬프트로 호출 (명시적 지시 필요)
+
+| Harness | 호출 방법 | 대상 | 설명 |
+|---|---|---|---|
+| `validate.sh` | `./scripts/validate.sh` 또는 프롬프트에서 지시 | Phase A/B | 7단계 검증 (빌드, 린트, 테스트, 보안, 성능) |
+| `smoke.sh` | `./scripts/smoke.sh` 또는 프롬프트에서 지시 | Phase B | 핵심 사용자 플로우 스모크 테스트 |
+| `bmad-create-story` | Phase A 프롬프트에 포함 | Phase A | story 파일 생성 (풀 컨텍스트 엔진) |
+| `bmad-code-review` | Phase B 프롬프트에 포함 | Phase B | 3층 병렬 리뷰 (Blind + Edge Case + Acceptance) |
+| `bmad-quick-dev` | `bmad-quick-dev` 직접 호출 | Quick Flow | 가벼운 작업용 |
+
+### 규칙 파일 (에이전트가 자동 참조)
+
+| 규칙 파일 | Phase A | Phase B | 검증 시점 |
+|---|---|---|---|
+| `architecture-rules.md` | docs/agents/로 참조 | @import 자동 로드 | 리뷰 시 + validate.sh |
+| `coding-rules.md` | docs/agents/로 참조 | @import 자동 로드 | 리뷰 시 + lint |
+| `testing-rules.md` | docs/agents/로 참조 | @import 자동 로드 | 리뷰 시 |
+| `security-rules.md` | docs/agents/로 참조 | @import 자동 로드 | 리뷰 시 + validate.sh 보안 체크 |
+| `performance-rules.md` | docs/agents/로 참조 | @import 자동 로드 | 리뷰 시 + validate.sh 성능 체크 |
+| `deploy-rules.md` | docs/agents/로 참조 | @import 자동 로드 | 리뷰 시 + validate.sh Docker 체크 |
+| `workflow-rules.md` | docs/agents/로 참조 | @import 자동 로드 | — |
+| `REVIEW.md` | — | @import 자동 로드 | Phase B 리뷰 시 APPROVED/REJECTED 판정 기준 |
 
 ---
 

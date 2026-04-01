@@ -40,7 +40,7 @@
 | `_bmad-output/implementation-artifacts/` | sprint-status, story 파일, 구현 산출물 |
 | `.agents/skills/` | Codex용 BMAD 스킬 (create-story, dev-story 등) |
 | `.claude/skills/` | Claude Code용 BMAD 스킬 (code-review 등) |
-| `docs/agents/` | 에이전트 운영 규칙 (상세) |
+| `docs/agents/` | 에이전트 운영 규칙 (architecture, coding, testing, security, performance, deploy, workflow) |
 | `docs/decisions/` | 아키텍처 결정 기록 (ADR) |
 | `scripts/` | 검증, 빌드, 스모크 테스트 스크립트 |
 | `state/` | 작업 진행 상태 파일 |

@@ -31,9 +31,23 @@ Config / Types (설정, 공유 타입)
 - 새 프레임워크/라이브러리 도입 시 docs/decisions/에 ADR 작성
 - 데이터 모델 변경 시 관련 타입 정의부터 수정
 
+## 필수 엔드포인트
+
+- `GET /healthz` — liveness (프로세스 생존 확인)
+- `GET /readyz` — readiness (트래픽 수용 가능 여부)
+- 서비스가 아닌 경우 (순수 프론트엔드 등) 해당 없음
+
+## API 규칙
+
+- URL 프리픽스 버저닝: `/api/v1/...`
+- 리스트 엔드포인트는 반드시 페이지네이션 (offset+limit 또는 cursor)
+- 표준 응답 형식: `{ "data": ..., "error": null }` / `{ "data": null, "error": { "code": "...", "message": "..." } }`
+- 적절한 HTTP 상태 코드 사용 (200 성공, 4xx 클라이언트 오류, 5xx 서버 오류)
+
 ## 금지 패턴
 
 - 전역 상태 남용 (필요 시 명시적 store 사용)
 - 순환 의존성
 - God object / God component
-- 하드코딩된 환경 변수 (config에서 관리)
+- 하드코딩된 환경 변수, 포트, URL (config에서 관리)
+- 동기적 블로킹 처리 (이메일, 이미지 처리 등은 백그라운드 잡으로)
