@@ -13,7 +13,9 @@
 
 ## 셋업 순서
 
-### 1. BMAD 업데이트
+### 1. 프로젝트 시작 전 이 레파지토리 전체를 복사하여 붙여넣습니다.
+
+### 2. BMAD 업데이트
 
 프로젝트 루트에서 실행합니다. 
 
@@ -22,18 +24,6 @@ npx bmad-method install
 ```
 
 최신버전일 경우 업데이트가 필요없습니다.
-
-### 2. 하네스 키트 복사
-
-이 키트의 전체 내용을 프로젝트 루트에 복사합니다.
-BMAD가 생성한 `_bmad/`, `_bmad-output/`은 덮어쓰지 않습니다.
-
-```bash
-cp -rn harness-starter-kit/. /your-project/
-chmod +x /your-project/scripts/*.sh /your-project/.harness/hooks/*.sh
-```
-
-> `cp -rn`은 이미 존재하는 파일을 덮어쓰지 않습니다. BMAD 파일이 보존됩니다.
 
 ### 3. BMAD 기획/설계 실행 (Claude Code)
 
