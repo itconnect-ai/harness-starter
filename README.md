@@ -173,23 +173,49 @@ reviews/epic-1/ 아래 리뷰 결과를 읽어서 문제를 파악한 후 수정
 
 ## 가벼운 작업 (Quick Flow)
 
-BMAD 풀코스 없이 간단한 수정/기능 추가를 할 때:
+BMAD 풀코스 없이 간단한 수정/기능 추가를 할 때도 Phase A/B 패턴을 따릅니다.
 
-```bash
-claude
-```
+### Quick Flow Phase A: Codex Desktop에서 구현
 
 ```
-bmad-quick-dev
+아래 작업을 bmad-quick-dev 스킬로 처리해.
+
+작업 내용: [여기에 작업 설명]
+
+규칙:
+- AGENTS.md의 규칙을 따를 것
+- docs/agents/ 아래 모든 규칙 참조 (security, performance, deploy 포함)
+- story 브랜치 생성: feature/<작업-이름>
+- ./scripts/validate.sh 실행하여 검증 통과 후 커밋
 ```
 
 또는 Barry(빠른 구현 전문가)를 호출:
 
 ```
-bmad-agent-quick-flow-solo-dev
+bmad-agent-quick-flow-solo-dev에게 아래 작업을 시켜줘.
+
+작업 내용: [여기에 작업 설명]
+
+규칙:
+- AGENTS.md 규칙 준수
+- docs/agents/ 규칙 참조
+- validate.sh 통과 후 커밋
 ```
 
-spec → implement → review → present를 한 세션에서 처리합니다.
+### Quick Flow Phase B: Claude Code에서 검증
+
+```
+feature/ 브랜치의 변경 사항을 리뷰하고 수정해줘.
+
+1. git diff main 확인
+2. bmad-code-review 스킬로 리뷰
+3. REJECTED 항목 직접 수정
+4. scripts/validate.sh 실행하여 최종 검증
+5. APPROVED 후 main에 merge
+```
+
+> Quick Flow도 **validate.sh 검증 + bmad-code-review 리뷰**는 동일하게 적용됩니다.
+> smoke.sh는 핵심 플로우를 건드린 경우에만 실행합니다.
 
 
 ---
