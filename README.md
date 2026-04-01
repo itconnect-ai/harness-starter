@@ -339,6 +339,53 @@ feature/ 브랜치의 변경 사항을 리뷰하고 수정해줘.
 
 ---
 
+## 다른 AI 도구 사용 시 (Kiro, Antigravity 등)
+
+이 Harness의 핵심 자산은 **도구 독립적**입니다:
+- `docs/agents/*.md` (규칙 7개) — 어떤 AI 도구든 동일하게 적용
+- `scripts/validate.sh`, `scripts/smoke.sh` — 어떤 환경에서든 실행 가능
+- `REVIEW.md` — 리뷰 기준은 도구와 무관
+
+BMAD 스킬이 없는 도구를 사용할 때는 아래 프롬프트에 규칙 파일을 직접 참조시키세요.
+
+### 구현 프롬프트 (Phase A 대체)
+
+```
+아래 작업을 구현해줘.
+
+작업 내용: [설명]
+
+반드시 아래 규칙 파일을 읽고 따를 것:
+- docs/agents/architecture-rules.md (레이어 경계, API 규칙, health check)
+- docs/agents/coding-rules.md (파일 구조, 로깅, 에러 처리)
+- docs/agents/security-rules.md (시크릿, 인증, 입력 검증)
+- docs/agents/performance-rules.md (N+1, LIMIT, 이벤트 cleanup)
+- docs/agents/deploy-rules.md (Docker, 포트, DB 보호)
+- docs/agents/testing-rules.md (테스트 대상, 작성 원칙)
+
+완료 전 반드시:
+- ./scripts/validate.sh 실행하여 검증 통과
+- 커밋 형식: feat(<scope>): <설명>
+```
+
+### 리뷰 프롬프트 (Phase B 대체)
+
+```
+현재 브랜치의 변경 사항을 리뷰하고 수정해줘.
+
+리뷰 기준: REVIEW.md 파일을 읽고 그대로 따를 것.
+추가 참조: docs/agents/ 아래 모든 규칙 파일.
+
+REJECTED 항목은 직접 수정하고,
+./scripts/validate.sh + ./scripts/smoke.sh로 최종 검증 후
+main에 merge.
+```
+
+> 이 프롬프트들은 BMAD 스킬 없이도 **규칙 파일 + 검증 스크립트**만으로
+> Harness의 핵심 가치(문맥, 테스트 계약, 리뷰 루프)를 유지합니다.
+
+---
+
 ## 선택적 확장
 
 ### .worktreeinclude
