@@ -124,6 +124,10 @@ Epic 1의 story를 순서대로 처리해.
 ```
 
 > Epic 1이 끝나면 Phase B로 넘어갑니다.
+>
+> **검증 흐름**: Codex가 각 story 구현 후 `validate.sh`를 자동 실행합니다.
+> `validate.sh`는 빌드, 린트, 테스트, 보안 체크, 성능 체크를 7단계로 수행합니다.
+> `smoke.sh`(핵심 플로우 테스트)는 Phase B에서 최종 검증 시 실행됩니다.
 
 ### 6단계: Phase B — Claude Code로 리뷰 + 수정 (Epic 단위)
 
