@@ -83,12 +83,21 @@ architecture.md의 기술 스택에 맞게 프로젝트를 초기화해줘.
 
 ## 4단계: Docker 환경 (해당 시)
 - Docker를 사용한다면:
-  - dev/docker-compose.dev.yml (개발: 볼륨 마운트, 핫리로드, 디버그 포트)
-  - 루트 docker-compose.yml (운영: restart:always, 리소스 제한, healthcheck)
-  - .dockerignore (node_modules, .git, .env*, coverage)
-  - .env.example (커밋용, 변수 목록만)
-  - 포트는 모두 환경변수 사용: ${PORT:-3000}
-  - DB 볼륨은 named volume으로 설정
+  - dev/docker-compose.dev.yml 생성 (로컬 개발 전용)
+    - 볼륨 마운트로 핫리로드
+    - 디버그 포트 노출
+    - .env.development 참조
+  - 루트 docker-compose.yml 생성 (운영 서버 전용)
+    - restart: always, 리소스 제한(memory/CPU)
+    - healthcheck 정의
+    - 디버그 포트 미노출
+    - .env.production 참조
+  - Dockerfile: multi-stage build (deps → build → runtime)
+  - .dockerignore: node_modules, .git, .env*, coverage, dist
+  - .env.example (커밋용, 변수 목록만 — 실제 값 없음)
+  - 모든 포트는 환경변수: ${PORT:-3000}, ${DB_PORT:-5432}
+  - DB 볼륨은 named volume, 프로덕션은 external: true
+  - docs/agents/deploy-rules.md의 모든 규칙 준수
 - Docker를 사용하지 않는다면 이 단계 건너뛰기
 
 ## 5단계: CI/CD
