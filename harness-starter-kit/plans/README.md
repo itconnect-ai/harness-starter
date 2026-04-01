@@ -12,4 +12,4 @@
 #     5. 검증 순서가 중요한 작업
 #
 # 파일명 형식: YYYY-MM-DD-작업이름.execplan.md
-# 템플릿: .harness/templates/execplan.md
+# 템플릿: templates/execplan.md
