@@ -1,66 +1,71 @@
 # Harness Engineering Starter Kit
-# BMAD + Claude Code + Codex 통합 운영 구조
+# BMAD + Claude Code + Codex Desktop 통합 운영 구조
 
 ## 개요
 
-이 키트는 **Claude Code(대화형 오케스트레이터) + Codex(구현 엔진)** 조합으로
+이 키트는 **Codex Desktop(구현) + Claude Code(품질 보장)** 조합으로
 100% AI 개발을 수행하기 위한 harness engineering 스타터 템플릿입니다.
 
-**핵심 원칙**: Claude Code 대화형 세션이 전체 파이프라인을 오케스트레이션합니다.
-Codex는 Claude Code가 Bash tool을 통해 호출하는 구현 엔진입니다.
-
 ```
-Claude Code (대화형 세션)
-  ├── BMAD 기획/설계 (PRD → Architecture → Stories)
-  ├── 프로젝트 초기화 + 하네스 설정
-  ├── Epic 오케스트레이션
-  │     ├── codex exec로 구현 호출
-  │     ├── validate.sh로 검증
-  │     ├── 직접 코드 리뷰 (Read/Grep/Glob)
-  │     ├── REJECTED → codex exec로 수정 지시
-  │     └── APPROVED → merge
-  └── 실패 story 수동 보완
+기획/설계: Claude Code + BMAD
+  PRD → Architecture → Epics/Stories
+
+Phase A: Codex Desktop (구현, Epic 단위)
+  story마다: bmad-create-story → bmad-dev-story → validate
+  BMAD 스킬 풀 활용, TDD, 무인 가능
+
+Phase B: Claude Code (품질 보장, Epic 단위)
+  bmad-code-review → 오류 직접 수정 → 테스트 보강
+  Hooks + Skills + Sub-agent 풀 활용
 ```
 
 ## 사전 조건
 
 - Claude Code CLI 설치 및 로그인 완료
-- Codex CLI 설치 및 로그인 완료 (`npm i -g @openai/codex`)
+- Codex Desktop 설치 및 로그인 완료
+- Codex Desktop 모델 설정: chatgpt-5.4, reasoning xhigh
 - Git 설정 완료
+- BMAD 설치 완료 (이 레파지토리에 포함됨)
 - jq 설치 완료 (`brew install jq` 또는 `sudo apt-get install -y jq`)
 - Node.js 20+
+
+### Codex Desktop 모델 설정
+
+Codex Desktop 설정 또는 `~/.codex/config.toml`에서:
+
+```toml
+model = "chatgpt-5.4"
+model_reasoning_effort = "xhigh"
+```
+
+또는 실행 시 플래그:
+```bash
+codex -m chatgpt-5.4 -c model_reasoning_effort=xhigh
+```
 
 ---
 
 ## 셋업 순서
 
-### 1단계: BMAD 설치
+### 1단계: 이 레파지토리를 프로젝트에 복사
+
+프로젝트 시작 전 이 레파지토리 전체를 복사하여 붙여넣습니다.
+BMAD와 하네스 파일이 모두 포함되어 있습니다.
+
+### 2단계: BMAD 업데이트
+
+최신 버전일 경우 업데이트가 필요 없습니다.
 
 ```bash
 cd your-project
 npx bmad-method install
 ```
 
-설치 후 `_bmad/`와 `_bmad-output/` 폴더가 생성됩니다.
-
-### 2단계: 하네스 키트 복사
-
-이 키트의 내용을 프로젝트 루트에 복사합니다.
-BMAD가 생성한 파일은 덮어쓰지 않습니다.
-
-```bash
-cp -rn harness-starter-kit/. /your-project/
-chmod +x /your-project/scripts/*.sh
-chmod +x /your-project/.claude/hooks/*.sh
-```
-
-### 3단계: BMAD 기획/설계 (Claude Code 대화형)
+### 3단계: BMAD 기획/설계 (Claude Code)
 
 ```bash
 claude
 ```
-
-Claude Code 대화형 세션에서 BMAD 워크플로우를 실행합니다:
 
 ```
 bmad-help
@@ -74,12 +79,12 @@ bmad-help
 완료 후 아래 산출물이 존재해야 합니다:
 - `_bmad-output/planning-artifacts/PRD.md`
 - `_bmad-output/planning-artifacts/architecture.md`
-- `_bmad-output/planning-artifacts/epics/` (story 파일들)
+- `_bmad-output/planning-artifacts/epics/` (epic 파일들)
 
-### 4단계: 프로젝트 초기화 + 하네스 커스터마이징
+### 4단계: 프로젝트 초기화 + 하네스 커스터마이징 (Claude Code)
 
-BMAD 기획이 끝난 후, **새 Claude Code 세션**에서 아래 프롬프트를 실행합니다.
-이 프롬프트 하나로 프로젝트 scaffolding부터 하네스 설정까지 한 번에 처리됩니다.
+**새 Claude Code 세션**에서 아래 프롬프트를 실행합니다.
+프로젝트 scaffolding부터 하네스 설정까지 한 번에 처리됩니다.
 
 ```
 이 프로젝트의 BMAD 산출물을 참고하여 아래 작업을 순서대로 실행해줘.
@@ -101,9 +106,9 @@ architecture.md의 기술 스택에 맞게 프로젝트를 초기화해줘.
 ## 2단계: 하네스 파일 커스터마이징
 - scripts/validate.sh → 실제 빌드/타입체크/린트/테스트 명령으로 교체
 - scripts/smoke.sh → PRD의 핵심 사용자 플로우 기반 스모크 테스트 대상 정의
-- docs/agents/architecture-rules.md → architecture.md의 레이어 구조, 모듈 경계, 의존성 방향 반영
-- docs/agents/coding-rules.md → 실제 기술 스택에 맞는 네이밍, 파일 구조, 에러 처리 규칙
-- docs/agents/testing-rules.md → 실제 테스트 프레임워크, 실행 명령, 커버리지 기준
+- docs/agents/architecture-rules.md → architecture.md의 레이어 구조, 모듈 경계 반영
+- docs/agents/coding-rules.md → 실제 기술 스택에 맞는 규칙
+- docs/agents/testing-rules.md → 실제 테스트 프레임워크, 커버리지 기준
 - AGENTS.md → Repo map의 소스 코드 경로를 실제 구조에 맞게
 
 ## 3단계: Claude Code 환경 업데이트
@@ -119,94 +124,137 @@ architecture.md의 기술 스택에 맞게 프로젝트를 초기화해줘.
 - scripts/validate.sh를 실행해서 모든 명령이 정상 동작하는지 확인
 ```
 
-### 5단계: Epic 실행 (대화형 — 기본 방식)
+### 5단계: Phase A — Codex Desktop으로 구현 (Epic 단위)
 
-**새 Claude Code 세션**에서 아래 프롬프트로 Epic을 실행합니다.
-
-```bash
-claude --permission-mode acceptEdits
-```
+Codex Desktop을 열고 아래 프롬프트를 입력합니다.
 
 ```
-Epic 1의 story를 순서대로 처리해줘.
+Epic 1의 story를 순서대로 처리해.
 
-진행 방법:
-1. _bmad-output/planning-artifacts/epics/epic-1/ 아래 story 파일을 번호순으로 읽기
-2. state/epic-1-progress.json이 있으면 이미 처리된 story는 건너뛰기
-3. 각 story마다:
-   a. story 브랜치 생성: git checkout -b story/<story-이름>
-   b. codex exec --full-auto "프롬프트" 로 구현 (프롬프트에 AGENTS.md 규칙, story 내용, architecture 참조 포함)
-   c. scripts/validate.sh 실행
-   d. 실패 시 → codex exec로 에러 내용 전달하며 수정 지시 → 재검증
-   e. 통과 시 → 코드 리뷰 (REVIEW.md 기준으로 diff 확인, 변경 파일 읽기, 아키텍처 경계 검증)
-   f. REJECTED → 리뷰 사유를 codex exec에 전달하여 수정 → 재리뷰
-   g. APPROVED → main에 merge
-   h. 3회 실패 시 skip
-4. 진행 상태를 state/epic-1-progress.json에 저장 (세션 중단 시 이어서 가능)
-5. 리뷰 결과를 reviews/epic-1/에 저장
+각 story마다:
+1. bmad-create-story 스킬(.agents/skills/bmad-create-story)로 story 파일 생성
+2. bmad-dev-story 스킬(.agents/skills/bmad-dev-story)로 구현 (TDD: red-green-refactor)
+3. ./scripts/validate.sh 실행하여 검증
+4. 통과 시 커밋: feat(<story-이름>): implement story
+5. 실패 시 수정 후 재검증, 3회 실패 시 skip하고 다음으로
+6. sprint-status.yaml은 스킬 워크플로우가 자동 업데이트
+
+규칙:
+- AGENTS.md의 모든 규칙을 따를 것
+- docs/agents/ 아래 규칙 참조
+- story별 브랜치 생성: story/<story-이름>
+- validate.sh 통과한 story만 커밋
+- 이전 story의 학습을 다음 story에 반영
 ```
 
-> **세션이 끊긴 경우**: 같은 프롬프트를 다시 실행하면 state 파일을 읽고 이어서 처리합니다.
+> **무인 실행**: Codex Desktop에서 프롬프트 입력 후 밤새 돌려놓을 수 있습니다.
+> Epic 1이 끝나면 Phase B로 넘어갑니다.
 
-### 6단계: 실패한 Story 수동 처리
+### 6단계: Phase B — Claude Code로 리뷰 + 수정 (Epic 단위)
 
 ```bash
 claude
 ```
 
 ```
-state/epic-1-progress.json의 failed story 목록을 확인하고,
+Epic 1의 구현 결과를 리뷰하고 수정해줘.
+
+1. sprint-status.yaml에서 review 상태인 story 확인
+2. 각 story의 코드를 bmad-code-review 스킬로 리뷰
+   (Blind Hunter + Edge Case Hunter + Acceptance Auditor 3층 병렬 리뷰)
+3. REJECTED 항목은 직접 수정해줘
+4. 누락된 테스트가 있으면 보강
+5. scripts/validate.sh + scripts/smoke.sh 최종 검증
+6. 모든 story APPROVED 후 main에 merge
+7. sprint-status.yaml 업데이트 (review → done)
+```
+
+### 7단계: 다음 Epic 또는 완료
+
+```
+Phase A (Codex Desktop): Epic 2 구현
+Phase B (Claude Code): Epic 2 리뷰
+...반복...
+```
+
+### 실패한 Story 처리
+
+Phase B에서 직접 수정이 어려운 경우:
+
+```bash
+claude
+```
+
+```
+state/epic-1-progress.json 또는 sprint-status.yaml에서
+failed/skip된 story를 확인하고,
 reviews/epic-1/ 아래 리뷰 결과를 읽어서 문제를 파악한 후 수정해줘.
 ```
 
 ---
 
-## 무인 배치 실행 (대안)
+## 가벼운 작업 (Quick Flow)
 
-대화형 세션이 아닌 완전 무인 자동화가 필요할 때 (예: 밤새 돌리기):
+BMAD 풀코스 없이 간단한 수정/기능 추가를 할 때:
 
 ```bash
-# Epic 1 무인 실행
+claude
+```
+
+```
+bmad-quick-dev
+```
+
+또는 Barry(빠른 구현 전문가)를 호출:
+
+```
+bmad-agent-quick-flow-solo-dev
+```
+
+spec → implement → review → present를 한 세션에서 처리합니다.
+
+---
+
+## CLI Fallback (Codex Desktop 없이)
+
+Codex Desktop이 아닌 CLI로 Phase A를 실행해야 할 때:
+
+```bash
+# Epic 1 무인 실행 (Codex CLI 사용)
 ./scripts/run-epic.sh 1
 
 # Timeout 커스터마이징
-CODEX_TIMEOUT=7200 ./scripts/run-epic.sh 1
+CODEX_TIMEOUT=7200 CODEX_MODEL=chatgpt-5.4 ./scripts/run-epic.sh 1
 
 # 상태 확인
 ./scripts/status.sh
 ```
 
-> **주의**: 무인 배치 모드는 Hooks, Sub-agent, Memory, 지능적 리뷰 등
-> harness 기능이 제한됩니다. 기본 방식은 대화형을 권장합니다.
-
-| 비교 | 대화형 (기본) | 무인 배치 (fallback) |
-|---|---|---|
-| Hooks (위험 명령 차단, 자동 검증) | 동작 | 제한적 |
-| Sub-agent 위임 | 가능 | 불가 |
-| Memory 누적 | 누적됨 | 안 됨 |
-| 리뷰 방식 | 파일 직접 읽기 + 도구 사용 | 텍스트 매칭 |
-| REJECTED 시 수정 | Codex에 지능적 재지시 | 단순 재시도 또는 실패 |
-| 실시간 가시성 | 전체 과정 보임 | tee로 로그 출력 |
-| 무인 실행 | Ctrl+C 전까지 | 완전 무인 |
+> **주의**: CLI 모드에서는 BMAD 스킬(create-story, dev-story)을 사용할 수 없습니다.
+> 단순 프롬프트 기반 구현만 가능하며, Codex Desktop 사용을 권장합니다.
 
 ---
 
 ## 파일 구조
 
 ```
-├── CLAUDE.md                          Claude Code 역할별 지침 (오케스트레이터)
-├── AGENTS.md                          저장소 공식 운영 규칙 (Codex + Claude 공용)
-├── REVIEW.md                          코드 리뷰 기준 (APPROVED/REJECTED 판정)
+├── CLAUDE.md                          Claude Code 지침 (Phase B: 리뷰+수정)
+├── AGENTS.md                          저장소 공식 규칙 (Phase A+B 공용)
+├── REVIEW.md                          코드 리뷰 기준
 ├── .gitignore                         추적 제외 파일
 │
+├── .agents/skills/                    Codex용 BMAD 스킬 (Phase A)
+│   ├── bmad-create-story/             story 생성 (풀 컨텍스트 엔진)
+│   ├── bmad-dev-story/                story 구현 (TDD)
+│   └── ...
+│
 ├── .claude/
-│   ├── settings.json                  Hook 설정 (위험 명령 차단, 편집 후 자동 검증)
+│   ├── settings.json                  Hook 설정
 │   ├── hooks/
-│   │   ├── block-rm.sh                PreToolUse: rm -rf 등 위험 명령 차단
-│   │   └── run-checks.sh             PostToolUse: 편집 후 자동 lint + typecheck
-│   └── skills/
-│       ├── bmad-help/                 BMAD 스킬 (수정 금지)
-│       ├── bmad-create-prd/
+│   │   ├── block-rm.sh                위험 명령 차단
+│   │   └── run-checks.sh             편집 후 자동 lint+typecheck
+│   └── skills/                        Claude Code용 BMAD 스킬 (Phase B)
+│       ├── bmad-code-review/          3층 병렬 코드 리뷰
 │       └── ...
 │
 ├── docs/
@@ -214,127 +262,67 @@ CODEX_TIMEOUT=7200 ./scripts/run-epic.sh 1
 │   │   ├── architecture-rules.md      아키텍처 경계 규칙
 │   │   ├── coding-rules.md            코드 작성 규칙
 │   │   ├── testing-rules.md           테스트 규칙
-│   │   └── workflow-rules.md          도구별 역할 분담 + 작업 흐름
-│   └── decisions/                     ADR (아키텍처 결정 기록)
+│   │   └── workflow-rules.md          Phase A/B 작업 흐름
+│   └── decisions/                     ADR
 │
 ├── templates/
-│   ├── execplan.md                    ExecPlan 템플릿 (복잡한 작업용)
+│   ├── execplan.md                    ExecPlan 템플릿
 │   └── adr.md                         ADR 템플릿
 │
 ├── scripts/
-│   ├── run-epic.sh                    무인 배치 실행 (fallback용)
-│   ├── validate.sh                    공통 검증 (빌드/린트/테스트)
+│   ├── run-epic.sh                    CLI fallback (Codex Desktop 없을 때)
+│   ├── validate.sh                    공통 검증
 │   ├── smoke.sh                       스모크 테스트
 │   └── status.sh                      진행 상태 대시보드
 │
 ├── _bmad-output/
-│   ├── planning-artifacts/            PRD, architecture, epics/stories
-│   └── implementation-artifacts/      sprint-status
+│   ├── planning-artifacts/            PRD, architecture, epics
+│   └── implementation-artifacts/      sprint-status, story 파일
 │
-├── state/                             작업 진행 상태 (재시작 지원)
-├── plans/                             ExecPlan 저장 (복잡한 작업만)
-└── reviews/                           리뷰 결과 + 로그 저장
+├── state/                             작업 진행 상태
+├── plans/                             ExecPlan (복잡한 작업)
+└── reviews/                           리뷰 결과 + 로그
 ```
 
 ---
 
 ## 운영 요약
 
-| 단계 | 도구 | 산출물 |
-|---|---|---|
-| 기획/설계 | Claude Code + BMAD | PRD, Architecture, Epics/Stories |
-| 프로젝트 초기화 | Claude Code (통합 프롬프트) | 소스 코드 scaffolding, 린팅/테스트 설정 |
-| 하네스 커스터마이징 | Claude Code (통합 프롬프트) | 프로젝트 맞춤 규칙/스크립트/Hooks |
-| Epic 구현 | Claude Code (오케스트레이터) → Codex (구현) | 코드 + 커밋 + 리뷰 결과 |
-| 실패 보완 | Claude Code (수동) | 수정된 코드 + 재리뷰 |
+| 단계 | 도구 | BMAD 스킬 | 산출물 |
+|---|---|---|---|
+| 기획/설계 | Claude Code | create-prd, create-architecture, create-epics | PRD, Architecture, Epics |
+| 프로젝트 초기화 | Claude Code | — | scaffolding, 린팅/테스트 설정 |
+| **Phase A: 구현** | **Codex Desktop** | **create-story, dev-story** | **코드 + 커밋 + story 파일** |
+| **Phase B: 품질 보장** | **Claude Code** | **code-review** | **리뷰 결과 + 수정 + 테스트** |
 
-| 규칙 | 설명 |
-|---|---|
-| 대화형이 기본 | Claude Code 세션에서 전체 파이프라인 실행 |
-| Epic 단위로 실행 | 전체 story를 한 번에 돌리지 않음 |
-| 재시작 가능 | state/ 파일 기반, 같은 프롬프트로 이어서 처리 |
-| 실패 격리 | 하나 실패해도 나머지 진행 |
-| 모든 단계에 검증 | validate.sh + REVIEW.md 기준 코드 리뷰 |
+## Harness Engineering 6요소
+
+| 요소 | Phase A (Codex) | Phase B (Claude) |
+|---|---|---|
+| 문맥 (Context) | AGENTS.md + docs/agents/ + BMAD 스킬 | CLAUDE.md + @imports + REVIEW.md |
+| 권한 (Permissions) | Codex Desktop 샌드박스 | Hooks (block-rm.sh) |
+| 테스트 계약 | bmad-dev-story TDD + validate.sh | bmad-code-review + 테스트 보강 + smoke.sh |
+| Hooks | — | PreToolUse + PostToolUse |
+| Skills | bmad-create-story, bmad-dev-story | bmad-code-review |
+| Review Loop | validate.sh 자체 검증 | bmad-code-review → 수정 → 재검증 |
 
 ---
 
 ## 선택적 확장
 
-프로젝트 성장에 따라 필요할 때 추가하세요.
-
-### Sub-agent: code-reviewer
-
-대화형 세션에서 `@code-reviewer`로 리뷰를 위임할 수 있습니다.
-`.claude/agents/code-reviewer.md`를 생성하세요:
-
-```markdown
----
-name: code-reviewer
-description: Review code changes for architecture violations, missing tests, security issues. Read-only, does not modify files.
-tools:
-  - Read
-  - Grep
-  - Glob
-  - Bash
-disallowedTools:
-  - Edit
-  - Write
-maxTurns: 15
----
-
-You are a code reviewer. Review the git diff of the current branch against main.
-
-Check against:
-1. docs/agents/architecture-rules.md (layer boundaries)
-2. docs/agents/testing-rules.md (test coverage)
-3. docs/agents/coding-rules.md (naming, structure)
-4. REVIEW.md (security, scope, quality)
-
-Report findings as:
-- CRITICAL: Must fix before merge
-- WARNING: Should fix
-- SUGGESTION: Optional improvement
-
-End with: APPROVED / NEEDS_CHANGES / CRITICAL_ISSUES
-```
-
-사용: `@code-reviewer src/api/ 변경분을 리뷰해줘`
-
-### Sub-agent: db-reader
-
-DB가 있는 프로젝트에서 읽기 전용 쿼리 에이전트로 사용합니다.
-`.claude/agents/db-reader.md`를 생성하세요:
-
-```markdown
----
-name: db-reader
-description: Execute read-only database queries for debugging and data inspection.
-tools:
-  - Bash
-model: claude-haiku-4-5
-maxTurns: 10
----
-
-You are a read-only database query agent.
-ONLY execute SELECT queries. Never execute INSERT, UPDATE, DELETE, DROP, or any write operation.
-```
-
 ### .worktreeinclude
 
-`claude --worktree` 사용 시 gitignored 파일을 worktree로 복사하는 목록입니다.
-프로젝트 루트에 `.worktreeinclude`를 생성하세요:
+`claude --worktree` 사용 시 gitignored 파일을 worktree로 복사:
 
 ```
 .env
 .env.local
-.env.development.local
 config/local.yaml
 ```
 
 ### CI/CD 파이프라인
 
-4단계 통합 프롬프트에서 "4단계: CI/CD" 섹션을 선택하면 자동 생성됩니다.
-수동으로 생성하려면 `.github/workflows/ci.yml`을 작성하세요:
+4단계 통합 프롬프트의 CI/CD 섹션으로 자동 생성하거나, 수동으로:
 
 ```yaml
 name: CI

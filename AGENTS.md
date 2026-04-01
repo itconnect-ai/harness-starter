@@ -1,30 +1,49 @@
 # AGENTS.md
 #
 # 이 파일은 Codex와 Claude Code 모두가 세션 시작 시 읽는 저장소 공식 운영 규칙입니다.
-# Codex는 이 파일을 자동 로드합니다. Claude Code는 CLAUDE.md에서 이 파일을 참조합니다.
+# Codex Desktop은 이 파일을 자동 로드합니다.
+# Claude Code는 CLAUDE.md에서 이 파일을 @import합니다.
 # 60줄 안팎으로 유지하고, 상세 규칙은 docs/agents/로 분리합니다.
 
-## Start here (모든 세션의 시작 루틴)
+## 역할 분담
 
-1. `_bmad-output/planning-artifacts/PRD.md` 읽기
+| Phase | 도구 | 역할 | BMAD 스킬 |
+|---|---|---|---|
+| Phase A | Codex Desktop | story 생성 + 구현 (Epic 단위) | bmad-create-story, bmad-dev-story |
+| Phase B | Claude Code | 코드 리뷰 + 수정 + 테스트 보강 (Epic 단위) | bmad-code-review |
+
+## Phase A: Codex Desktop 시작 루틴
+
+1. 이 파일(AGENTS.md)의 규칙 확인
 2. `_bmad-output/planning-artifacts/architecture.md` 읽기
 3. `_bmad-output/implementation-artifacts/sprint-status.yaml` 확인
-4. 현재 작업 대상 story 파일 읽기
-5. `state/progress.json` 확인 (이전 진행 상태)
-6. 이 파일의 규칙과 `docs/agents/` 아래 관련 규칙 참고
-7. `./scripts/validate.sh` 실행하여 현재 상태 확인
+4. `docs/agents/` 아래 관련 규칙 참고
+5. 대상 Epic의 story를 순서대로 처리:
+   - `bmad-create-story` 스킬로 story 파일 생성
+   - `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
+   - `./scripts/validate.sh` 실행하여 검증
+6. Codex Desktop 모델 권장: chatgpt-5.4, reasoning: xhigh
+
+## Phase B: Claude Code 시작 루틴
+
+1. `CLAUDE.md`의 지침 확인 (이 파일은 @import됨)
+2. `_bmad-output/implementation-artifacts/sprint-status.yaml` 확인
+3. 완료된 story 브랜치를 `bmad-code-review` 스킬로 리뷰
+4. REJECTED 항목 직접 수정 + 테스트 보강
+5. `./scripts/validate.sh` + `./scripts/smoke.sh` 최종 검증
 
 ## Repo map
 
 | 경로 | 역할 |
 |---|---|
 | `_bmad-output/planning-artifacts/` | PRD, architecture, epics, stories (공식 제품 문서) |
-| `_bmad-output/implementation-artifacts/` | sprint-status, 구현 산출물 |
+| `_bmad-output/implementation-artifacts/` | sprint-status, story 파일, 구현 산출물 |
+| `.agents/skills/` | Codex용 BMAD 스킬 (create-story, dev-story 등) |
+| `.claude/skills/` | Claude Code용 BMAD 스킬 (code-review 등) |
 | `docs/agents/` | 에이전트 운영 규칙 (상세) |
 | `docs/decisions/` | 아키텍처 결정 기록 (ADR) |
-| `plans/` | 복잡한 작업의 실행 계획 (ExecPlan) |
+| `scripts/` | 검증, 빌드, 스모크 테스트 스크립트 |
 | `state/` | 작업 진행 상태 파일 |
-| `scripts/` | 검증, 빌드, 부팅 스크립트 |
 | `reviews/` | 코드 리뷰 결과 저장 |
 | `src/` or `apps/` | 소스 코드 |
 | `tests/` | 테스트 코드 |

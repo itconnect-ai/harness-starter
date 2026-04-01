@@ -2,15 +2,15 @@
 # ============================================================================
 # scripts/run-epic.sh
 #
-# Epic 단위 무인 배치 실행 스크립트 (fallback용)
+# Phase A CLI Fallback — Codex Desktop이 없을 때 사용
 #
-# ⚠️ 이 스크립트는 무인 배치 처리가 필요할 때만 사용하세요.
-# 기본 실행 방식은 대화형 Claude Code 세션입니다.
-# (README.md의 "5단계: Epic 실행" 참고)
+# ⚠️ 이 스크립트는 Codex Desktop을 사용할 수 없을 때만 사용하세요.
+# 기본 실행 방식은 Codex Desktop (Phase A) → Claude Code (Phase B)입니다.
+# (README.md의 "5단계, 6단계" 참고)
 #
-# 대화형 vs. 스크립트 비교:
-#   대화형: Hooks, Memory, Sub-agent, 실시간 가시성, 지능적 리뷰
-#   스크립트: 완전 무인, 밤새 돌리기 가능, 하지만 기능 제한적
+# Codex Desktop vs. 이 스크립트:
+#   Desktop: BMAD 스킬(create-story, dev-story), TDD, 세션 내 학습
+#   스크립트: BMAD 스킬 불가, 단순 프롬프트 구현, 리뷰 없음 (Phase B에서 처리)
 #
 # 특징:
 #   - Epic 단위 배치 처리
@@ -75,6 +75,8 @@ COOLDOWN=${COOLDOWN:-30}                   # Story 사이 쿨다운 (30초)
 
 # Codex 설정
 CODEX_SANDBOX="${CODEX_SANDBOX:---full-auto}"
+CODEX_MODEL="${CODEX_MODEL:-chatgpt-5.4}"
+CODEX_REASONING="${CODEX_REASONING:-xhigh}"
 
 # ============================================================================
 # 유틸리티 함수
@@ -272,10 +274,10 @@ process_story() {
     safe_create_branch "$branch_name"
 
     # ── Step 2: Codex 구현 (실시간 출력) ─────────────────────────
-    log "  [2/4] Codex implementing... (timeout: ${CODEX_TIMEOUT}s = $(( CODEX_TIMEOUT / 60 ))m)"
+    log "  [2/3] Codex implementing... (timeout: ${CODEX_TIMEOUT}s = $(( CODEX_TIMEOUT / 60 ))m)"
 
     local codex_exit=0
-    timeout "$CODEX_TIMEOUT" codex exec $CODEX_SANDBOX \
+    timeout "$CODEX_TIMEOUT" codex exec -m "$CODEX_MODEL" -c model_reasoning_effort="$CODEX_REASONING" $CODEX_SANDBOX \
       "You are implementing a story for a software project.
 
 INSTRUCTIONS:
@@ -328,7 +330,7 @@ IMPORTANT:
     git diff --name-only main..HEAD 2>/dev/null | sed 's/^/       /'
 
     # ── Step 3: Validate (실시간 출력) ───────────────────────────
-    log "  [3/4] Validating... (timeout: ${VALIDATE_TIMEOUT}s)"
+    log "  [3/3] Validating... (timeout: ${VALIDATE_TIMEOUT}s)"
 
     local validate_exit=0
     timeout "$VALIDATE_TIMEOUT" ./scripts/validate.sh \
@@ -344,72 +346,18 @@ IMPORTANT:
 
     log "  Validation passed"
 
-    # ── Step 4: Claude 리뷰 ──────────────────────────────────────
-    log "  [4/4] Claude reviewing... (timeout: ${CLAUDE_TIMEOUT}s)"
+    # ── 완료: merge to main ──────────────────────────────────────
+    # 리뷰는 Phase B (Claude Code)에서 Epic 단위로 수행합니다.
+    # 여기서는 validate 통과 시 바로 merge합니다.
+    log "  [$story_name] Validate passed, merging..."
 
-    local review_result=""
-    local claude_exit=0
-
-    review_result=$(timeout "$CLAUDE_TIMEOUT" claude -p \
-      "You are reviewing code changes on a feature branch.
-
-TASK: Review the git diff of the current branch against main.
-
-REVIEW CRITERIA (from REVIEW.md):
-1. Architecture boundaries: Check docs/agents/architecture-rules.md
-2. Tests: Verify changed behavior has test coverage
-3. Security: Input validation, auth checks, no sensitive data exposure
-4. Story scope: Changes should be within the story scope only
-5. Code quality: Naming consistency, error handling, no unnecessary complexity
-
-STORY CONTEXT: Read $story_file for acceptance criteria.
-
-OUTPUT FORMAT:
-- If all criteria pass, respond with exactly: APPROVED
-- If issues found, respond with: REJECTED followed by numbered issues
-
-Be strict but fair. Only flag real issues, not style preferences." \
-      2>"$claude_log") || claude_exit=$?
-
-    if [ $claude_exit -ne 0 ]; then
-      log "  Claude review failed (exit: $claude_exit)"
-
-      if [ $claude_exit -eq 124 ]; then
-        log "  Claude timed out"
-      fi
-
-      if check_rate_limit "$claude_log"; then
-        wait_for_rate_limit "Claude"
-      fi
-
-      safe_checkout_main || true
-      retry=$((retry + 1))
-      continue
-    fi
-
-    # 리뷰 결과 저장 + 터미널 출력
-    echo "$review_result" > "$review_file"
-    log "  Review result:"
-    echo "$review_result" | head -20 | sed 's/^/       /'
-
-    # ── Step 5: 판정 ─────────────────────────────────────────────
-    if echo "$review_result" | grep -qi "^APPROVED"; then
-      log "  [$story_name] APPROVED"
-
-      if safe_merge_to_main "$branch_name"; then
-        mark_completed "$story_name"
-        success=true
-        log "  Merged to main"
-      else
-        log "  Merge failed"
-        mark_failed "$story_name" "merge-conflict"
-        safe_checkout_main || true
-        success=true
-      fi
+    if safe_merge_to_main "$branch_name"; then
+      mark_completed "$story_name"
+      success=true
+      log "  Merged to main"
     else
-      log "  [$story_name] REJECTED"
-      log "  Review saved: $review_file"
-      mark_failed "$story_name" "review-rejected"
+      log "  Merge failed"
+      mark_failed "$story_name" "merge-conflict"
       safe_checkout_main || true
       success=true
     fi
@@ -442,6 +390,8 @@ main() {
   log "  CLAUDE_TIMEOUT = ${CLAUDE_TIMEOUT}s ($(( CLAUDE_TIMEOUT / 60 ))m)"
   log "  VALIDATE_TIMEOUT = ${VALIDATE_TIMEOUT}s"
   log "  MAX_RETRIES    = $MAX_RETRIES"
+  log "  CODEX_MODEL    = $CODEX_MODEL"
+  log "  CODEX_REASONING= $CODEX_REASONING"
   log "  CODEX_SANDBOX  = $CODEX_SANDBOX"
 
   # Story 파일 수집 (파일명 기준 정렬)
@@ -536,10 +486,11 @@ main() {
   log "  Review dir : $REVIEW_DIR/"
   log "  Log dir    : $LOG_DIR/"
   log ""
-  log "  실패/스킵된 story는 대화형 Claude Code에서 처리하세요:"
+  log "  다음 단계: Claude Code에서 Phase B (리뷰+수정)를 실행하세요:"
   log "    claude"
-  log "    → \"state/epic-${EPIC_NUM}-progress.json의 failed story를 확인하고 수정해줘\""
+  log "    → \"Epic ${EPIC_NUM}의 구현 결과를 bmad-code-review로 리뷰하고 수정해줘\""
   log ""
+  log "  실패/스킵된 story도 Phase B에서 함께 처리됩니다."
   log "  이 스크립트를 다시 실행하면 미처리 story만 처리합니다."
   log "======================================================"
 }

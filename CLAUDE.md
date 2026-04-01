@@ -5,15 +5,16 @@
 #
 # 이 프로젝트에서 Claude Code의 역할:
 #   1. BMAD 기획/설계 실행 (PM, Architect agent 대화)
-#   2. Epic 오케스트레이션 (Codex 호출 → 검증 → 리뷰 → 머지)
-#   3. Codex 구현 코드의 리뷰/검증/테스트 보강
+#   2. Epic 리뷰 + 수정 + 테스트 보강 (Phase B)
+#
+# 구현은 Codex Desktop이 담당합니다 (Phase A).
 
 ## 기본 동작
 
 - 저장소 규칙은 항상 `AGENTS.md`를 우선 참고
 - 상세 규칙은 `docs/agents/` 아래 문서 참조
 - BMAD 산출물은 `_bmad-output/` 아래에서 참조
-- `.claude/skills/bmad-*/` 내용을 수정하지 않음
+- `.claude/skills/bmad-*/`와 `.agents/skills/bmad-*/` 내용을 수정하지 않음
 
 ## 역할 1: BMAD 기획/설계
 
@@ -23,36 +24,35 @@ BMAD agent를 실행할 때의 규칙:
 - 기획 단계에서 구현 코드를 작성하지 않음
 - bmad-help으로 다음 단계 안내 받기
 
-## 역할 2: Epic 오케스트레이션
+## 역할 2: Epic 리뷰 + 수정 (Phase B)
 
-대화형 세션에서 Epic의 story를 순서대로 처리할 때의 규칙:
-- story별 브랜치 생성: `story/<story-이름>`
-- Codex 호출: `codex exec --full-auto "프롬프트"` (Bash tool 사용)
-- 구현 후 `./scripts/validate.sh` 실행으로 검증
-- 검증 통과 시 직접 코드 리뷰 (REVIEW.md 기준)
-- REJECTED 시 리뷰 사유를 포함하여 Codex에 수정 지시
-- APPROVED 시 main에 merge
-- 진행 상태를 `state/` 파일에 기록
-- 3회 실패 시 skip하고 다음 story로 진행
+Codex Desktop이 구현한 Epic 전체를 리뷰하고 수정할 때의 규칙:
 
-## 역할 3: 코드 리뷰
-
-Codex가 구현한 변경분을 리뷰할 때의 규칙:
+### 리뷰
+- `bmad-code-review` 스킬로 3층 병렬 리뷰 실행
 - `REVIEW.md`의 리뷰 기준을 따름
 - `docs/agents/architecture-rules.md`의 경계 규칙 확인
 - 변경된 파일을 직접 Read/Grep으로 확인 (텍스트 diff만 보지 않음)
-- 변경된 동작에 테스트가 있는지 확인
-- 보안 이슈(입력 검증, 인증, 권한) 확인
-- 엣지 케이스와 에러 처리 확인
-- 문제가 없으면 정확히 `APPROVED`로 응답
-- 문제가 있으면 항목별로 명확하게 나열
 
-## 역할 4: 테스트 보강
+### 오류 수정
+- REJECTED 항목을 직접 수정 (Edit/Write)
+- 수정 시 Hooks가 자동으로 lint+typecheck 실행
+- 수정 후 `./scripts/validate.sh`로 재검증
 
-리뷰 후 테스트가 부족하면:
+### 테스트 보강
 - 누락된 테스트 케이스 작성
 - 엣지 케이스 커버리지 추가
-- `./scripts/validate.sh` 실행하여 확인
+- `./scripts/validate.sh` + `./scripts/smoke.sh`로 최종 검증
+
+### 완료
+- 모든 story APPROVED 후 main에 merge
+- sprint-status.yaml 업데이트 (review → done)
+
+## 역할 3: 가벼운 작업 (Quick Flow)
+
+BMAD 풀코스 없이 간단한 작업을 할 때:
+- `bmad-quick-dev` 스킬 사용 (spec → implement → review → present)
+- 또는 `bmad-agent-quick-flow-solo-dev` (Barry) 호출
 
 ## Build, Test & Quality
 # ⚠️ 기획 완료 후 기술 스택에 맞게 아래 명령을 수정하세요.
