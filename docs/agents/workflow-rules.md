@@ -17,10 +17,12 @@
 1. `bmad-create-story` 스킬로 story 파일 생성 (풀 컨텍스트 엔진)
 2. `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
 3. `./scripts/validate.sh` 실행
-4. 통과 시 커밋: `feat(story-이름): 설명`
+4. 통과 시 **commit + push 필수**: `git add -A && git commit -m "feat(story-이름): 설명" && git push`
 5. sprint-status.yaml 업데이트 (스킬이 자동 처리)
 6. 실패 시 수정 후 재검증, 3회 실패 시 skip
 7. 다음 story로 진행
+
+**중요:** validate 통과한 story는 반드시 commit과 push를 완료해야 다음 story로 진행할 수 있다. push 없이 다음 story 진행은 금지.
 
 Codex Desktop 모델 설정:
 - 모델: chatgpt-5.4

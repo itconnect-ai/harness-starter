@@ -22,6 +22,8 @@
    - `bmad-create-story` 스킬로 story 파일 생성
    - `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
    - `./scripts/validate.sh` 실행하여 검증
+   - 통과 시 **commit + push 필수**: `git add -A && git commit -m "feat(story-name): 설명" && git push`
+   - validate 실패 시 수정 후 재검증, 3회 실패 시 skip
 6. Codex Desktop 모델 권장: chatgpt-5.4, reasoning: xhigh
 
 ## Phase B: Claude Code 시작 루틴
@@ -67,3 +69,4 @@
 - story와 관련 없는 리팩터링 금지
 - 관련 문서를 같은 변경에서 업데이트
 - 커밋 메시지 형식: `feat(story-name): 설명` 또는 `fix(story-name): 설명`
+- Phase A에서는 validate 통과 후 **commit + push 필수** (push 없이 다음 story 진행 금지)
