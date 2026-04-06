@@ -12,6 +12,7 @@
 ## 기본 동작
 
 - 저장소 규칙은 항상 `AGENTS.md`를 우선 참고
+- 도구 사용 원칙은 `AGENTS.md`를 따른다. CLI로 가능한 작업은 CLI를 우선 사용
 - 상세 규칙은 `docs/agents/` 아래 문서 참조
 - BMAD 산출물은 `_bmad-output/` 아래에서 참조
 - `.claude/skills/bmad-*/`와 `.agents/skills/bmad-*/` 내용을 수정하지 않음

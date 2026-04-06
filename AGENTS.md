@@ -50,6 +50,14 @@
 | `src/` or `apps/` | 소스 코드 |
 | `tests/` | 테스트 코드 |
 
+## Tooling rules
+
+- CLI로 수행 가능한 작업은 기본적으로 CLI를 우선 사용
+- 소스 제어와 PR은 `git`, `gh`, 검증과 반복 작업은 저장소 `scripts/*`, JavaScript/TypeScript 패키지와 테스트 실행은 `npm`, `npx`, `node`, Python 작업은 `python`, `pip`, `uv`, HTTP 확인은 `curl` 또는 `http`, 브라우저/E2E는 `npx playwright`, 컨테이너 작업은 `docker`, `docker compose`, Kubernetes 작업은 `kubectl`, `helm`을 우선 사용
+- 동일 작업을 내장 도구와 CLI 둘 다로 수행할 수 있으면 CLI를 선택
+- 프로젝트에 공식 래퍼 스크립트나 표준 명령이 있으면 ad-hoc 명령보다 그것을 우선 사용
+- CLI가 설치되어 있지 않거나 인증, 권한, 플랫폼 제약으로 실행할 수 없을 때만 대체 도구를 사용
+
 ## Validation (완료 기준)
 
 - 작업 완료 선언 전 반드시 `./scripts/validate.sh` 실행
