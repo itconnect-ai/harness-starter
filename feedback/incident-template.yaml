@@ -19,3 +19,5 @@ evidence:           # 증거 파일 경로 (배열)
   - ""              # reviews/epic-1/story-3-review.md
   - ""              # reviews/epic-1/logs/story-3-validate.log
 mechanically_detectable: false  # true면 validate.sh/hook blocking 승격 대상
+regression_test: ""   # 재현 테스트 경로 (예: tests/regression/epic-1-story-3-missing-limit.test.ts)
+                      # Phase C에서 incident 생성 시 재현 테스트도 함께 작성

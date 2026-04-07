@@ -46,15 +46,16 @@ Phase B 완료 후 실행:
 2. `state/epic-N-progress.json`에서 failed/skipped story 확인
 3. 반복된 REJECTED 패턴과 validate 실패 패턴을 식별
 4. `feedback/incidents/`에 incident YAML 생성 (incident-template.yaml 참고)
-5. `state/learning-loop.json` 업데이트 (패턴별 발생 횟수)
-6. 승격 정책에 따라 조치:
+5. 각 incident에 대해 재현 테스트를 `tests/regression/`에 작성 (다음 Epic에서 자동 실행)
+6. `state/learning-loop.json` 업데이트 (패턴별 발생 횟수)
+7. 승격 정책에 따라 조치:
    - 1회: 기록만
    - 2회: `docs/agents/feedback-rules.md`에 활성 규칙 추가
    - 3회+ 또는 치명적 (기계적으로 판별 가능한 경우만): `scripts/validate.sh`에 **blocking check**로 추가 (warning이 아닌 exit 1)
    - 아키텍처 성격: `docs/agents/architecture-rules.md` 또는 `docs/decisions/`에 ADR
-7. **`.claude/hooks/`는 Claude Phase B에만 적용됨** — 공통 강제는 `scripts/validate.sh` 또는 CI 우선
-8. **완료 기준**: harness 파일(validate.sh, rules, hooks)을 수정했으면 반드시 `bash -n scripts/validate.sh && ./scripts/validate.sh` 재실행하여 harness 자체가 깨지지 않았는지 확인
-9. 검증 통과 후 커밋: `chore(harness): Epic N 회고 반영`
+8. **`.claude/hooks/`는 Claude Phase B에만 적용됨** — 공통 강제는 `scripts/validate.sh` 또는 CI 우선
+9. **완료 기준**: harness 파일(validate.sh, rules, hooks)을 수정했으면 반드시 `bash -n scripts/validate.sh && ./scripts/validate.sh` 재실행하여 harness 자체가 깨지지 않았는지 확인
+10. 검증 통과 후 커밋: `chore(harness): Epic N 회고 반영`
 
 feedback-rules.md 운영 규칙:
 - 최대 10개 active rule만 유지
