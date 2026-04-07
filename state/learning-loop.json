@@ -1,5 +1,14 @@
 {
-  "patterns": {},
+  "patterns": {
+    "_example_missing-tests": {
+      "count": 0,
+      "status": "watching",
+      "last_seen_epic": null,
+      "source_incidents": [],
+      "promoted_to": null
+    }
+  },
+  "status_values": ["watching", "active-rule", "blocking-check", "retired"],
   "last_retro_epic": null,
   "last_updated": null
 }

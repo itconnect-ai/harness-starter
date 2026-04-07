@@ -1,11 +1,13 @@
 # feedback/incident-template.yaml
 #
 # Phase C 회고 시 발견된 실수를 기록하는 템플릿입니다.
-# 파일명: feedback/incidents/epic-{N}-story-{M}.yaml
+# 파일명: feedback/incidents/epic-{N}-story-{M}-{category}.yaml
+# 한 story에서 실수가 여러 개면 category별로 파일을 분리합니다.
 
+incident_id: ""     # epic-1-story-3-missing-tests (유니크 식별자)
 phase: ""           # A 또는 B
 epic: ""            # epic-1
-story: ""           # story-1-user-auth
+story: ""           # story-3-user-auth
 category: ""        # missing-tests | scope-drift | edge-case-omission
                     # architecture-violation | hardcoded-secret | hardcoded-port
                     # n-plus-one-query | missing-limit | missing-cleanup
@@ -13,5 +15,7 @@ category: ""        # missing-tests | scope-drift | edge-case-omission
 symptom: ""         # 무엇이 잘못되었는가 (1줄)
 root_cause: ""      # 왜 발생했는가 (1줄)
 preventable_by: ""  # rule | validate | hook | lint | test | adr
-evidence: ""        # 증거 파일 경로 (reviews/epic-N/story-M-review.md 등)
-mechanically_detectable: false  # true면 validate.sh/hook 승격 대상
+evidence:           # 증거 파일 경로 (배열)
+  - ""              # reviews/epic-1/story-3-review.md
+  - ""              # reviews/epic-1/logs/story-3-validate.log
+mechanically_detectable: false  # true면 validate.sh/hook blocking 승격 대상

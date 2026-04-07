@@ -118,6 +118,27 @@ else
   echo "Performance check: PASSED"
 fi
 
+# ── 8. Blocking 체크 (Phase C에서 승격된 패턴) ──
+# Phase C 회고에서 3회+ 반복된 패턴은 여기에 blocking check로 추가합니다.
+# 아래 BLOCKING_ERRORS 카운터가 0이 아니면 validate가 실패합니다.
+echo ""
+echo "[8/8] Blocking checks (promoted from Phase C)..."
+BLOCKING_ERRORS=0
+
+# ── Phase C 승격 패턴은 아래에 추가 ──
+# 예시 (승격 시 주석 해제하고 패턴에 맞게 수정):
+# if grep -rn "하드코딩패턴" src/ --include="*.ts" 2>/dev/null; then
+#   echo "BLOCKED: [incident-id] 설명"
+#   BLOCKING_ERRORS=$((BLOCKING_ERRORS+1))
+# fi
+
+if [ $BLOCKING_ERRORS -gt 0 ]; then
+  echo "Blocking check: $BLOCKING_ERRORS error(s) — FAIL"
+  exit 1
+else
+  echo "Blocking check: PASSED (no promoted patterns)"
+fi
+
 echo ""
 echo "======================================"
 echo " Validation PASSED"

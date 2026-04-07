@@ -50,10 +50,11 @@ Phase B 완료 후 실행:
 6. 승격 정책에 따라 조치:
    - 1회: 기록만
    - 2회: `docs/agents/feedback-rules.md`에 활성 규칙 추가
-   - 3회+ 또는 치명적 (기계적으로 판별 가능한 경우만): `scripts/validate.sh`에 자동 감지 추가
+   - 3회+ 또는 치명적 (기계적으로 판별 가능한 경우만): `scripts/validate.sh`에 **blocking check**로 추가 (warning이 아닌 exit 1)
    - 아키텍처 성격: `docs/agents/architecture-rules.md` 또는 `docs/decisions/`에 ADR
 7. **`.claude/hooks/`는 Claude Phase B에만 적용됨** — 공통 강제는 `scripts/validate.sh` 또는 CI 우선
-8. 변경 사항 커밋: `chore(harness): Epic N 회고 반영`
+8. **완료 기준**: harness 파일(validate.sh, rules, hooks)을 수정했으면 반드시 `bash -n scripts/validate.sh && ./scripts/validate.sh` 재실행하여 harness 자체가 깨지지 않았는지 확인
+9. 검증 통과 후 커밋: `chore(harness): Epic N 회고 반영`
 
 feedback-rules.md 운영 규칙:
 - 최대 10개 active rule만 유지
