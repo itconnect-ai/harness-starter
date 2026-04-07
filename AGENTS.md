@@ -18,6 +18,7 @@
 2. `_bmad-output/planning-artifacts/architecture.md` 읽기
 3. `_bmad-output/implementation-artifacts/sprint-status.yaml` 확인
 4. `docs/agents/` 아래 관련 규칙 참고
+   - **필수**: `docs/agents/feedback-rules.md` (과거 반복 실수 패턴) 반드시 읽기
 5. 대상 Epic의 story를 순서대로 처리:
    - `bmad-create-story` 스킬로 story 파일 생성
    - `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
@@ -45,7 +46,8 @@
 | `docs/agents/` | 에이전트 운영 규칙 (architecture, coding, testing, security, performance, deploy, workflow) |
 | `docs/decisions/` | 아키텍처 결정 기록 (ADR) |
 | `scripts/` | 검증, 빌드, 스모크 테스트 스크립트 |
-| `state/` | 작업 진행 상태 파일 |
+| `feedback/` | 실수 기록(incidents) + 템플릿 |
+| `state/` | 작업 진행 상태 파일 + learning-loop.json |
 | `reviews/` | 코드 리뷰 결과 저장 |
 | `src/` or `apps/` | 소스 코드 |
 | `tests/` | 테스트 코드 |
@@ -76,5 +78,6 @@
 - 변경 범위를 현재 story로 제한
 - story와 관련 없는 리팩터링 금지
 - 관련 문서를 같은 변경에서 업데이트
-- 커밋 메시지 형식: `feat(story-name): 설명` 또는 `fix(story-name): 설명`
+- 커밋 메시지 형식: `type(scope): description`
+- type: feat, fix, refactor, test, docs, chore
 - Phase A에서는 validate 통과 후 **commit + push 필수** (push 없이 다음 story 진행 금지)

@@ -77,3 +77,4 @@ BMAD 풀코스 없이 간단한 작업을 할 때:
 @docs/agents/security-rules.md
 @docs/agents/performance-rules.md
 @docs/agents/deploy-rules.md
+@docs/agents/feedback-rules.md

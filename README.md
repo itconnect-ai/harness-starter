@@ -129,6 +129,7 @@ Epic 1의 story를 순서대로 처리해.
 규칙:
 - AGENTS.md의 모든 규칙을 따를 것
 - docs/agents/ 아래 규칙 참조
+- **docs/agents/feedback-rules.md를 반드시 읽고 과거 실수를 반복하지 말 것**
 - story별 브랜치 생성: story/<story-이름>
 - validate.sh 통과한 story만 commit + push
 - push 없이 다음 story 진행 금지
@@ -158,11 +159,38 @@ Epic 1의 구현 결과를 리뷰하고 수정해줘.
 7. sprint-status.yaml 업데이트 (review → done)
 ```
 
-### 7단계: 다음 Epic 또는 완료
+### 7단계: Phase C — 회고 + Harness 강화 (Epic 완료 후)
+
+Phase B 완료 후, **같은 Claude Code 세션**에서 이어서 실행합니다.
+
+```
+이번 Epic의 리뷰 결과를 분석하고 harness를 강화해줘.
+
+1. 아래 파일들을 모두 읽고 반복된 실수 패턴을 찾아줘:
+   - reviews/epic-1/*.md (리뷰 결과)
+   - reviews/epic-1/logs/*-validate.log (validate 실패 로그)
+   - reviews/epic-1/logs/*-codex.log (Codex 실행 로그)
+   - state/epic-1-progress.json (failed/skipped story)
+2. 발견된 패턴마다 feedback/incidents/에 YAML 기록
+   (feedback/incident-template.yaml 형식 참고)
+3. state/learning-loop.json 업데이트 (패턴별 발생 횟수)
+4. 승격 정책에 따라 조치:
+   - 1회: 기록만
+   - 2회: docs/agents/feedback-rules.md에 활성 규칙 추가
+   - 3회+ (기계적으로 판별 가능한 경우만): scripts/validate.sh에 자동 감지 추가
+   - 아키텍처 성격: docs/agents/architecture-rules.md 또는 docs/decisions/에 ADR
+5. feedback-rules.md는 최대 10개 active rule 유지
+   - 2 Epic 동안 재발 없으면 retired로 이동
+   - validate.sh로 승격된 항목은 제거
+6. 변경 사항 커밋: chore(harness): Epic 1 회고 반영
+```
+
+### 8단계: 다음 Epic 또는 완료
 
 ```
 Phase A (Codex Desktop): Epic 2 구현
 Phase B (Claude Code): Epic 2 리뷰
+Phase C (Claude Code): Epic 2 회고
 ...반복...
 ```
 
@@ -278,7 +306,11 @@ feature/ 브랜치의 변경 사항을 리뷰하고 수정해줘.
 │   ├── planning-artifacts/            PRD, architecture, epics
 │   └── implementation-artifacts/      sprint-status, story 파일
 │
-├── state/                             작업 진행 상태
+├── feedback/
+│   ├── incidents/                     Phase C에서 생성되는 실수 기록 (YAML)
+│   └── incident-template.yaml         incident 구조 템플릿
+│
+├── state/                             작업 진행 상태 + learning-loop.json
 ├── plans/                             ExecPlan (복잡한 작업)
 └── reviews/                           리뷰 결과 + 로그
 ```
@@ -293,6 +325,7 @@ feature/ 브랜치의 변경 사항을 리뷰하고 수정해줘.
 | 프로젝트 초기화 | Claude Code | — | scaffolding, 린팅/테스트 설정 |
 | **Phase A: 구현** | **Codex Desktop** | **create-story, dev-story** | **코드 + 커밋 + story 파일** |
 | **Phase B: 품질 보장** | **Claude Code** | **code-review** | **리뷰 결과 + 수정 + 테스트** |
+| **Phase C: 회고** | **Claude Code** | **bmad-retrospective (선택)** | **incidents + feedback-rules 갱신 + harness 강화** |
 
 ## Harness 작동 매트릭스
 
@@ -336,6 +369,7 @@ feature/ 브랜치의 변경 사항을 리뷰하고 수정해줘.
 | `security-rules.md` | docs/agents/로 참조 | @import 자동 로드 | 리뷰 시 + validate.sh 보안 체크 |
 | `performance-rules.md` | docs/agents/로 참조 | @import 자동 로드 | 리뷰 시 + validate.sh 성능 체크 |
 | `deploy-rules.md` | docs/agents/로 참조 | @import 자동 로드 | 리뷰 시 + validate.sh Docker 체크 |
+| `feedback-rules.md` | AGENTS.md에 명시적 읽기 지시 | @import 자동 로드 | Phase A 시작 시 + Phase C에서 재작성 |
 | `workflow-rules.md` | docs/agents/로 참조 | @import 자동 로드 | — |
 | `REVIEW.md` | — | @import 자동 로드 | Phase B 리뷰 시 APPROVED/REJECTED 판정 기준 |
 

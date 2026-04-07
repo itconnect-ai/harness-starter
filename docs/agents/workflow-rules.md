@@ -39,6 +39,28 @@ Epic 전체를 대상으로:
 6. 모든 story APPROVED 후 main에 merge
 7. sprint-status.yaml 업데이트 (review → done)
 
+## Phase C: Claude Code 회고 + Harness 강화 (Epic 완료 후)
+
+Phase B 완료 후 실행:
+1. `reviews/epic-N/` 아래 리뷰 결과 (*.md + logs/*-validate.log + *-codex.log) 분석
+2. `state/epic-N-progress.json`에서 failed/skipped story 확인
+3. 반복된 REJECTED 패턴과 validate 실패 패턴을 식별
+4. `feedback/incidents/`에 incident YAML 생성 (incident-template.yaml 참고)
+5. `state/learning-loop.json` 업데이트 (패턴별 발생 횟수)
+6. 승격 정책에 따라 조치:
+   - 1회: 기록만
+   - 2회: `docs/agents/feedback-rules.md`에 활성 규칙 추가
+   - 3회+ 또는 치명적 (기계적으로 판별 가능한 경우만): `scripts/validate.sh`에 자동 감지 추가
+   - 아키텍처 성격: `docs/agents/architecture-rules.md` 또는 `docs/decisions/`에 ADR
+7. **`.claude/hooks/`는 Claude Phase B에만 적용됨** — 공통 강제는 `scripts/validate.sh` 또는 CI 우선
+8. 변경 사항 커밋: `chore(harness): Epic N 회고 반영`
+
+feedback-rules.md 운영 규칙:
+- 최대 10개 active rule만 유지
+- 각 규칙은 source incident id를 가짐
+- 최근 2 Epic 동안 재발 없으면 retired로 이동
+- 기계적 판별 가능 패턴이 validate.sh로 승격되면 여기서 제거
+
 ## Quick Flow (가벼운 작업)
 
 BMAD 풀코스가 필요 없는 간단한 작업:
