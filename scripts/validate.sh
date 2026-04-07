@@ -38,17 +38,32 @@ npm run lint 2>&1 || {
   exit 1
 }
 
-# ── 4. 테스트 ──
+# ── 4a. 테스트 ──
 echo ""
-echo "[4/7] Tests..."
+echo "[4a/8] Tests..."
 npm run test 2>&1 || {
   echo "FAIL: Tests failed"
   exit 1
 }
 
+# ── 4b. Regression 테스트 (Phase C에서 생성된 재현 테스트) ──
+if [ -d "tests/regression" ] && [ "$(ls -A tests/regression/ 2>/dev/null)" ]; then
+  echo ""
+  echo "[4b/8] Regression tests..."
+  npx vitest run tests/regression/ 2>&1 || \
+  npx jest --testPathPattern=tests/regression/ 2>&1 || \
+  npm run test -- --testPathPattern=regression 2>&1 || {
+    echo "FAIL: Regression tests failed"
+    exit 1
+  }
+  echo "Regression tests: PASSED"
+else
+  echo "[4b/8] Regression tests: skipped (no tests/regression/ found)"
+fi
+
 # ── 5. 빌드 ──
 echo ""
-echo "[5/7] Build..."
+echo "[5/8] Build..."
 npm run build 2>&1 || {
   echo "FAIL: Build failed"
   exit 1
@@ -56,7 +71,7 @@ npm run build 2>&1 || {
 
 # ── 6. 보안 체크 ──
 echo ""
-echo "[6/7] Security checks..."
+echo "[6/8] Security checks..."
 SECURITY_WARNINGS=0
 
 # 하드코딩된 시크릿 패턴 감지
@@ -87,7 +102,7 @@ fi
 
 # ── 7. 성능 체크 ──
 echo ""
-echo "[7/7] Performance checks..."
+echo "[7/8] Performance checks..."
 PERF_WARNINGS=0
 
 # 바운드 없는 findMany() 감지

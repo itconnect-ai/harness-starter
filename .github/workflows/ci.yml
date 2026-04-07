@@ -1,0 +1,52 @@
+# .github/workflows/ci.yml
+#
+# Phase B에서 main에 merge할 때 마지막 안전망.
+# ⚠️ 4단계 프로젝트 초기화 후 기술 스택에 맞게 수정하세요.
+#
+# 이 파일은 Node.js 기본 템플릿입니다.
+# Python, Go 등 다른 스택이면 steps를 교체하세요.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm run test -- --coverage
+
+      - name: Regression tests
+        run: |
+          if [ -d "tests/regression" ] && [ "$(ls -A tests/regression/ 2>/dev/null)" ]; then
+            npx vitest run tests/regression/ || npx jest --testPathPattern=tests/regression/
+          else
+            echo "No regression tests found, skipping"
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - name: Security audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
