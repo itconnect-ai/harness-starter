@@ -1,1 +1,61 @@
+# ============================================================================
+# .gitattributes
+#
+# 줄바꿈(line ending) 정규화 규칙
+# Windows/Linux/macOS 혼합 환경에서 CRLF/LF 충돌을 방지합니다.
+#
+# 원칙:
+#   - 텍스트 파일은 Git 내부에서 항상 LF로 저장
+#   - checkout 시 OS에 맞게 변환 (auto)
+#   - 실행 스크립트(.sh)는 항상 LF 강제 (Linux/macOS에서 실행되므로)
+#   - 바이너리 파일은 변환하지 않음
+# ============================================================================
+
+# ── 기본: 텍스트 파일 자동 감지 + 정규화 ──
+* text=auto
+
+# ── 실행 스크립트: 항상 LF (bash/sh는 CRLF에서 \r 오류 발생) ──
 *.sh text eol=lf
+*.bash text eol=lf
+
+# ── 설정/데이터 파일: 항상 LF (Docker, CI, 서버 환경에서 사용) ──
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.env text eol=lf
+*.env.* text eol=lf
+Dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+.dockerignore text eol=lf
+Makefile text eol=lf
+.editorconfig text eol=lf
+.prettierrc text eol=lf
+.eslintrc text eol=lf
+
+# ── 소스 코드: auto (OS에 맞게 변환) ──
+*.ts text
+*.tsx text
+*.js text
+*.jsx text
+*.css text
+*.scss text
+*.html text
+*.md text
+*.mdx text
+
+# ── 바이너리: 변환하지 않음 ──
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.mp4 binary
+*.webm binary
+*.zip binary
+*.tar.gz binary
+*.pdf binary
