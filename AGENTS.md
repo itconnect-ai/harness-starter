@@ -22,10 +22,12 @@
 5. 대상 Epic의 story를 순서대로 처리:
    - `bmad-create-story` 스킬로 story 파일 생성
    - `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
-   - `./scripts/validate.sh` 실행하여 검증
+   - `./scripts/validate-quick.sh` 실행하여 빠른 검증 (lint + typecheck + 관련 테스트)
    - 통과 시 **commit + push 필수**: `git add -A && git commit -m "feat(story-name): 설명" && git push`
-   - validate 실패 시 수정 후 재검증, 3회 실패 시 skip
-6. Codex Desktop 모델 권장: chatgpt-5.4, reasoning: xhigh
+   - validate-quick 실패 시 수정 후 재검증, 3회 실패 시 skip
+6. Epic의 모든 story 완료 후 `./scripts/validate.sh` 전체 실행
+   - 실패 시 `./scripts/validate.sh --from=실패단계`로 재개
+7. Codex Desktop 모델 권장: chatgpt-5.4, reasoning: xhigh
 
 ## Phase B: Claude Code 시작 루틴
 
@@ -43,14 +45,29 @@
 | `_bmad-output/implementation-artifacts/` | sprint-status, story 파일, 구현 산출물 |
 | `.agents/skills/` | Codex용 BMAD 스킬 (create-story, dev-story 등) |
 | `.claude/skills/` | Claude Code용 BMAD 스킬 (code-review 등) |
-| `docs/agents/` | 에이전트 운영 규칙 (architecture, coding, testing, security, performance, deploy, workflow) |
+| `docs/agents/` | 에이전트 운영 규칙 (architecture, coding, testing, security, performance, deploy, workflow, backup, seo, feedback) |
+| `docs/checklists/` | 수동 체크리스트 (페이지 수정 후, 배포 전) |
 | `docs/decisions/` | 아키텍처 결정 기록 (ADR) |
-| `scripts/` | 검증, 빌드, 스모크 테스트 스크립트 |
+| `scripts/` | 검증 (validate, validate-quick, smoke), 빌드, 스모크 테스트 스크립트 |
+| `scripts/lib/` | 검증 공용 헬퍼 (validate-utils.sh) |
 | `feedback/` | 실수 기록(incidents) + 템플릿 |
-| `state/` | 작업 진행 상태 파일 + learning-loop.json |
+| `state/` | 작업 진행 상태 파일 + learning-loop.json + validate 로그 |
 | `reviews/` | 코드 리뷰 결과 저장 |
 | `src/` or `apps/` | 소스 코드 |
 | `tests/` | 테스트 코드 |
+
+## 참조 파일
+
+- `docs/agents/architecture-rules.md`
+- `docs/agents/coding-rules.md`
+- `docs/agents/testing-rules.md`
+- `docs/agents/security-rules.md`
+- `docs/agents/performance-rules.md`
+- `docs/agents/deploy-rules.md`
+- `docs/agents/workflow-rules.md`
+- `docs/agents/feedback-rules.md`
+- `docs/agents/backup-rules.md`
+- `docs/agents/seo-rules.md`
 
 ## Tooling rules
 
@@ -62,7 +79,12 @@
 
 ## Validation (완료 기준)
 
-- 작업 완료 선언 전 반드시 `./scripts/validate.sh` 실행
+- Story 완료 시: `./scripts/validate-quick.sh` (lint + typecheck + 관련 테스트)
+- Epic 완료 시: `./scripts/validate.sh` (전체 검증, 순차 테스트)
+- validate.sh 실패 시: `./scripts/validate.sh --from=실패단계`로 재개 (처음부터 다시 돌리지 않음)
+- 실패 시 로그 확인: `state/validate/latest/*.log` (단계별 로그 파일)
+- 기본 출력은 summary 모드 (단계별 성공/실패 + 소요시간만 표시)
+- 전체 출력이 필요하면: `VALIDATE_OUTPUT_MODE=verbose ./scripts/validate.sh`
 - critical path가 있으면 `./scripts/smoke.sh` 추가 실행
 - 검증이 실패하면 완료로 간주하지 않음
 
@@ -80,4 +102,4 @@
 - 관련 문서를 같은 변경에서 업데이트
 - 커밋 메시지 형식: `type(scope): description`
 - type: feat, fix, refactor, test, docs, chore
-- Phase A에서는 validate 통과 후 **commit + push 필수** (push 없이 다음 story 진행 금지)
+- Phase A에서는 validate-quick 통과 후 **commit + push 필수** (push 없이 다음 story 진행 금지)

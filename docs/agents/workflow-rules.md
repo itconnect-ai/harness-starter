@@ -16,13 +16,22 @@
 각 story마다 순서대로:
 1. `bmad-create-story` 스킬로 story 파일 생성 (풀 컨텍스트 엔진)
 2. `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
-3. `./scripts/validate.sh` 실행
+3. `./scripts/validate-quick.sh` 실행 (lint + typecheck + 변경 관련 테스트만)
 4. 통과 시 **commit + push 필수**: `git add -A && git commit -m "feat(story-이름): 설명" && git push`
 5. sprint-status.yaml 업데이트 (스킬이 자동 처리)
 6. 실패 시 수정 후 재검증, 3회 실패 시 skip
 7. 다음 story로 진행
 
-**중요:** validate 통과한 story는 반드시 commit과 push를 완료해야 다음 story로 진행할 수 있다. push 없이 다음 story 진행은 금지.
+**중요:** validate-quick 통과한 story는 반드시 commit과 push를 완료해야 다음 story로 진행할 수 있다. push 없이 다음 story 진행은 금지.
+
+Epic의 모든 story 완료 후:
+1. `./scripts/validate.sh` 전체 실행 (순차 테스트로 병렬 충돌 방지)
+2. 실패 시 수정 후 `./scripts/validate.sh --from=실패단계`로 재개
+3. 전체 통과 후 Phase B로 이동
+
+**--from 옵션:** 테스트에서 실패했으면 `--from=test`, 빌드에서 실패했으면 `--from=build`로 해당 단계부터 재실행. 처음부터 다시 돌리지 않음.
+
+**검증 출력:** 기본 summary 모드로 단계별 성공/실패만 표시. 실패 시 `state/validate/latest/*.log`에서 해당 단계 로그를 확인. 전체 출력이 필요하면 `VALIDATE_OUTPUT_MODE=verbose`를 설정.
 
 Codex Desktop 모델 설정:
 - 모델: chatgpt-5.4
@@ -35,7 +44,7 @@ Epic 전체를 대상으로:
 2. 각 story 브랜치의 코드를 `bmad-code-review` 스킬로 리뷰
 3. REJECTED 항목 직접 수정 (Edit/Write, Hooks 자동 작동)
 4. 누락 테스트 보강
-5. `./scripts/validate.sh` + `./scripts/smoke.sh` 최종 검증
+5. `./scripts/validate.sh` + `./scripts/smoke.sh` 최종 검증 (이미 Epic 단위 validate를 통과했으므로 재확인 성격)
 6. 모든 story APPROVED 후 main에 merge
 7. sprint-status.yaml 업데이트 (review → done)
 
@@ -79,6 +88,7 @@ BMAD 풀코스가 필요 없는 간단한 작업:
 
 ## 실패 처리
 
-- Phase A validate 실패: Codex가 수정 후 재시도 (3회까지)
+- Phase A validate-quick 실패: Codex가 수정 후 재시도 (3회까지)
+- Phase A validate.sh (Epic 단위) 실패: `--from=실패단계`로 재개, 처음부터 다시 돌리지 않음
 - Phase B 리뷰 거부: Claude Code가 직접 수정
 - 3회 실패: skip 처리하고 수동 확인 대상으로 표시

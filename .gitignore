@@ -29,6 +29,7 @@ Thumbs.db
 
 # State (template은 유지, 실행 결과는 제외)
 state/epic-*-progress.json
+state/validate/
 
 # Review logs (리뷰 결과는 유지, 로그는 제외)
 reviews/*/logs/

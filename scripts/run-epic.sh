@@ -287,14 +287,14 @@ INSTRUCTIONS:
 4. Implement the story following ALL acceptance criteria
 5. Follow coding rules in docs/agents/coding-rules.md
 6. Add or update tests for changed behavior
-7. Run ./scripts/validate.sh and fix any failures
+7. Run ./scripts/validate-quick.sh and fix any failures
 8. Commit with message: feat($story_name): implement story
 
 IMPORTANT:
 - Stay within the scope of this story only
 - Do not refactor unrelated code
 - Do not add dependencies without justification
-- Ensure validate.sh passes before your final commit" \
+- Ensure validate-quick.sh passes before your final commit" \
       2>&1 | tee "$codex_log" || codex_exit=${PIPESTATUS[0]}
 
     if [ $codex_exit -ne 0 ]; then
@@ -329,27 +329,27 @@ IMPORTANT:
     log "  Changed files:"
     git diff --name-only main..HEAD 2>/dev/null | sed 's/^/       /'
 
-    # ── Step 3: Validate (실시간 출력) ───────────────────────────
-    log "  [3/3] Validating... (timeout: ${VALIDATE_TIMEOUT}s)"
+    # ── Step 3: Quick Validate (실시간 출력) ────────────────────
+    log "  [3/3] Quick validating... (timeout: ${VALIDATE_TIMEOUT}s)"
 
     local validate_exit=0
-    timeout "$VALIDATE_TIMEOUT" ./scripts/validate.sh \
+    timeout "$VALIDATE_TIMEOUT" ./scripts/validate-quick.sh \
       2>&1 | tee "$validate_log" || validate_exit=${PIPESTATUS[0]}
 
     if [ $validate_exit -ne 0 ]; then
-      log "  Validation failed (exit: $validate_exit)"
+      log "  Quick validation failed (exit: $validate_exit)"
       show_log_tail "$validate_log" 10
       safe_checkout_main || true
       retry=$((retry + 1))
       continue
     fi
 
-    log "  Validation passed"
+    log "  Quick validation passed"
 
     # ── 완료: merge to main ──────────────────────────────────────
     # 리뷰는 Phase B (Claude Code)에서 Epic 단위로 수행합니다.
-    # 여기서는 validate 통과 시 바로 merge합니다.
-    log "  [$story_name] Validate passed, merging..."
+    # 여기서는 validate-quick 통과 시 바로 merge합니다.
+    log "  [$story_name] Quick validate passed, merging..."
 
     if safe_merge_to_main "$branch_name"; then
       mark_completed "$story_name"
@@ -456,6 +456,29 @@ main() {
       sleep "$COOLDOWN"
     fi
   done
+
+  # ── Epic 단위 전체 검증 ──
+  local completed_count=$(jq '.completed | length' "$STATE_FILE")
+  if [ "$completed_count" -gt 0 ]; then
+    echo ""
+    log "======================================================"
+    log "Epic $EPIC_NUM: Full validation (all stories completed)"
+    log "======================================================"
+
+    local full_validate_log="${LOG_DIR}/epic-${EPIC_NUM}-full-validate.log"
+    local full_validate_exit=0
+    ./scripts/validate.sh 2>&1 | tee "$full_validate_log" || full_validate_exit=${PIPESTATUS[0]}
+
+    if [ $full_validate_exit -ne 0 ]; then
+      log ""
+      log "  Full validation FAILED"
+      log "  Fix issues and re-run: ./scripts/validate.sh --from=<failed-step>"
+      log "  Log: $full_validate_log"
+    else
+      log ""
+      log "  Full validation PASSED"
+    fi
+  fi
 
   # ── 최종 보고 ──
   echo ""

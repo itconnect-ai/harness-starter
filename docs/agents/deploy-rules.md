@@ -1,6 +1,9 @@
 # docs/agents/deploy-rules.md
+
 #
+
 # 배포 및 Docker 규칙입니다.
+
 # ⚠️ 프로젝트의 배포 환경에 맞게 수정하세요.
 
 ## 환경 분리
@@ -28,7 +31,7 @@
   ```
 - `COPY . .`를 `RUN npm install` 앞에 두지 않음 (캐시 무효화)
 - Multi-stage build 필수 (deps → build → runtime 분리)
-- `.dockerignore` 필수: node_modules, .git, .env*, coverage, dist
+- `.dockerignore` 필수: node_modules, .git, .env\*, coverage, dist
 
 ## 데이터베이스 보호
 
@@ -37,7 +40,8 @@
 - 프로덕션 DB 볼륨은 `external: true` 설정
 - 스키마 변경은 마이그레이션 도구 사용 (Prisma migrate, Flyway 등)
 - DROP DATABASE, DROP TABLE을 init 스크립트에 넣지 않음
-- 배포 전 `scripts/db-backup.sh`로 백업 권장
+- 배포 전 `scripts/backup.sh`로 백업 필수 — 상세 규칙은 `docs/agents/backup-rules.md` 참조
+- 백업 시스템 구성은 `db-backup-setup` 스킬 사용
 
 ## Health Check
 
