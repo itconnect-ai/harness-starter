@@ -60,10 +60,10 @@ validate.sh는 `--no-threads` (Vitest) 또는 `--runInBand` (Jest)로 순차 실
 
 ## 실행 명령
 
-- Story 빠른 검증: `./scripts/validate-quick.sh`
-- Epic 전체 검증: `./scripts/validate.sh`
-- 실패 단계부터 재개: `./scripts/validate.sh --from=test`
-- 전체 출력 모드: `VALIDATE_OUTPUT_MODE=verbose ./scripts/validate.sh`
+- Story 빠른 검증: bash/WSL/macOS/Linux는 `./scripts/validate-quick.sh`, Windows PowerShell은 `./scripts/validate-quick.ps1`
+- Epic 전체 검증: bash/WSL/macOS/Linux는 `./scripts/validate.sh`, Windows PowerShell은 `./scripts/validate.ps1`
+- 실패 단계부터 재개: bash/WSL/macOS/Linux는 `./scripts/validate.sh --from=test`, Windows PowerShell은 `./scripts/validate.ps1 --from=test`
+- 전체 출력 모드: bash/WSL/macOS/Linux는 `VALIDATE_OUTPUT_MODE=verbose ./scripts/validate.sh`, Windows PowerShell은 `$env:VALIDATE_OUTPUT_MODE='verbose'; ./scripts/validate.ps1`
 - 특정 파일: `npm run test -- --grep "파일명"`
 - 커버리지: `npm run test:coverage`
 

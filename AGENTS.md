@@ -22,10 +22,14 @@
 5. 대상 Epic의 story를 순서대로 처리:
    - `bmad-create-story` 스킬로 story 파일 생성
    - `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
-   - `./scripts/validate-quick.sh` 실행하여 빠른 검증 (lint + typecheck + 관련 테스트)
+   - 현재 OS/셸에 맞는 검증 진입점 실행
+     - bash/WSL/macOS/Linux: `./scripts/validate-quick.sh`
+     - Windows PowerShell: `./scripts/validate-quick.ps1`
    - 통과 시 **commit + push 필수**: `git add -A && git commit -m "feat(story-name): 설명" && git push`
    - validate-quick 실패 시 수정 후 재검증, 3회 실패 시 skip
-6. Epic의 모든 story 완료 후 `./scripts/validate.sh` 전체 실행
+6. Epic의 모든 story 완료 후 현재 OS/셸에 맞는 전체 검증 실행
+   - bash/WSL/macOS/Linux: `./scripts/validate.sh`
+   - Windows PowerShell: `./scripts/validate.ps1`
    - 실패 시 `./scripts/validate.sh --from=실패단계`로 재개
 7. Codex Desktop 모델 권장: chatgpt-5.4, reasoning: xhigh
 
@@ -79,9 +83,9 @@
 
 ## Validation (완료 기준)
 
-- Story 완료 시: `./scripts/validate-quick.sh` (lint + typecheck + 관련 테스트)
-- Epic 완료 시: `./scripts/validate.sh` (전체 검증, 순차 테스트)
-- validate.sh 실패 시: `./scripts/validate.sh --from=실패단계`로 재개 (처음부터 다시 돌리지 않음)
+- Story 완료 시: 현재 OS/셸에 맞는 quick validate 실행 (`validate-quick.sh` 또는 `validate-quick.ps1`)
+- Epic 완료 시: 현재 OS/셸에 맞는 전체 validate 실행 (`validate.sh` 또는 `validate.ps1`)
+- validate 실패 시: bash/WSL/macOS/Linux는 `./scripts/validate.sh --from=실패단계`, Windows PowerShell은 `./scripts/validate.ps1 --from=실패단계`로 재개
 - 실패 시 로그 확인: `state/validate/latest/*.log` (단계별 로그 파일)
 - 기본 출력은 summary 모드 (단계별 성공/실패 + 소요시간만 표시)
 - 전체 출력이 필요하면: `VALIDATE_OUTPUT_MODE=verbose ./scripts/validate.sh`

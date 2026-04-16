@@ -81,9 +81,9 @@ BMAD 풀코스 없이 간단한 작업을 할 때:
 - Test: `npm run test`
 - Lint: `npm run lint`
 - Type check: `npm run typecheck`
-- Story 검증: `./scripts/validate-quick.sh` (Story 완료 시)
-- Epic 검증: `./scripts/validate.sh` (Epic 완료 시, 작업 완료 전 필수)
-- 실패 재개: `./scripts/validate.sh --from=실패단계`
+- Story 검증: bash/WSL/macOS/Linux는 `./scripts/validate-quick.sh`, Windows PowerShell은 `./scripts/validate-quick.ps1`
+- Epic 검증: bash/WSL/macOS/Linux는 `./scripts/validate.sh`, Windows PowerShell은 `./scripts/validate.ps1`
+- 실패 재개: bash/WSL/macOS/Linux는 `./scripts/validate.sh --from=실패단계`, Windows PowerShell은 `./scripts/validate.ps1 --from=실패단계`
 - 검증 로그: `state/validate/latest/*.log` (단계별 로그)
 - 출력 모드: 기본 summary, `VALIDATE_OUTPUT_MODE=verbose`로 전체 출력
 - 실패 디버깅: summary 출력의 로그 경로를 읽어서 원인 파악
