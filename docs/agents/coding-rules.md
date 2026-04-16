@@ -39,7 +39,38 @@
 
 ## 커밋
 
-- 형식: `type(scope): description`
-- type: feat, fix, refactor, test, docs, chore
-- scope: story 이름 또는 모듈 이름
+### 형식 (Conventional Commits)
+
+- 첫 줄: `type(scope): 한 줄 요약` (72자 이내)
+- type: feat, fix, refactor, test, docs, chore, perf, style, ci, build
+- scope: story 이름 또는 모듈 이름 (소문자/숫자/하이픈)
 - 하나의 커밋에 하나의 논리적 변경
+- `.githooks/commit-msg`가 첫 줄 형식을 자동 검증 (install-git-hooks.sh/.ps1로 활성화)
+
+### AI 친화 본문 구조 (권장)
+
+AI가 나중에 `git log --grep` 또는 `git log -- <path>`로 맥락을 찾기 쉽게 본문을 구조화합니다.
+
+```
+type(scope): 한 줄 요약
+
+파일:
+- path/to/a.ts: 이 파일에서 무엇이 바뀌었나
+- path/to/b.ts: 이 파일에서 무엇이 바뀌었나
+
+이유: 이 변경이 필요했던 배경 (버그, 요구사항, incident-id 등)
+
+관련: story-id, incident-id, PR 번호 등
+```
+
+### 원칙
+
+- **자주 커밋하라**: 누락·오류·소실 시 유일한 복구 수단은 git. story 단위 완료마다 반드시 commit + push
+- **AI가 찾을 수 있게 써라**: 파일 경로와 변경 내용을 본문에 명시하면 미래의 에이전트가 `git log`로 역추적 가능
+- **type을 과하게 세분화하지 마라**: 10개 type으로 충분. 새 type 추가 시 이 문서에 기록
+
+### 금지
+
+- 빈 메시지, `"update"`, `"fix"` 같은 의미 없는 한 줄 커밋
+- `--amend`로 push된 커밋을 덮어쓰는 행위 (항상 새 커밋 생성)
+- `--no-verify`로 hook 우회 (사용자가 명시 허락한 경우만)
