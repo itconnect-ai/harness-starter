@@ -72,38 +72,61 @@ if [ -n "${1:-}" ]; then
   echo ""
 fi
 
+# ── Template 감지: package.json 없으면 npm 관련 단계 모두 skip ──
+HAS_PACKAGE_JSON=false
+if [ -f package.json ]; then
+  HAS_PACKAGE_JSON=true
+fi
+
 # ── 1. 의존성 설치 ──
 if [ "$SKIP_INSTALL" = false ]; then
-  run_step "01" "install" "npm install --prefer-offline" || exit 1
+  if [ "$HAS_PACKAGE_JSON" = false ]; then
+    run_step_skip "01" "install" "no package.json (template state)"
+  else
+    run_step "01" "install" "npm install --prefer-offline" || exit 1
+  fi
 else
   run_step_skip "01" "install" "--from"
 fi
 
 # ── 2. 타입 체크 ──
 if [ "$SKIP_TYPECHECK" = false ]; then
-  run_step "02" "typecheck" "npm run typecheck 2>&1 || npx tsc --noEmit 2>&1" || exit 1
+  if [ "$HAS_PACKAGE_JSON" = false ]; then
+    run_step_skip "02" "typecheck" "no package.json (template state)"
+  else
+    run_step "02" "typecheck" "npm run typecheck 2>&1 || npx tsc --noEmit 2>&1" || exit 1
+  fi
 else
   run_step_skip "02" "typecheck" "--from"
 fi
 
 # ── 3. 린트 ──
 if [ "$SKIP_LINT" = false ]; then
-  run_step "03" "lint" "npm run lint" || exit 1
+  if [ "$HAS_PACKAGE_JSON" = false ]; then
+    run_step_skip "03" "lint" "no package.json (template state)"
+  else
+    run_step "03" "lint" "npm run lint" || exit 1
+  fi
 else
   run_step_skip "03" "lint" "--from"
 fi
 
 # ── 4a. 테스트 (순차 실행) ──
 if [ "$SKIP_TEST" = false ]; then
-  run_step "04a" "test" "npx vitest run --no-threads 2>&1 || npx jest --runInBand 2>&1 || npm run test 2>&1" || exit 1
-
-  # 4b. Regression 테스트
-  if [ -d "tests/regression" ] && [ "$(ls -A tests/regression/ 2>/dev/null)" ]; then
-    run_step "04b" "regression-test" \
-      "npx vitest run --no-threads tests/regression/ 2>&1 || npx jest --runInBand --testPathPattern=tests/regression/ 2>&1 || npm run test -- --testPathPattern=regression 2>&1" \
-      || exit 1
+  if [ "$HAS_PACKAGE_JSON" = false ]; then
+    run_step_skip "04a" "test" "no package.json (template state)"
+    run_step_skip "04b" "regression-test" "no package.json (template state)"
   else
-    run_step_skip "04b" "regression-test" "no tests/regression/ found"
+    run_step "04a" "test" "npx vitest run --no-threads 2>&1 || npx jest --runInBand 2>&1 || npm run test 2>&1" || exit 1
+
+    # 4b. Regression 테스트
+    if [ -d "tests/regression" ] && [ "$(ls -A tests/regression/ 2>/dev/null)" ]; then
+      run_step "04b" "regression-test" \
+        "npx vitest run --no-threads tests/regression/ 2>&1 || npx jest --runInBand --testPathPattern=tests/regression/ 2>&1 || npm run test -- --testPathPattern=regression 2>&1" \
+        || exit 1
+    else
+      run_step_skip "04b" "regression-test" "no tests/regression/ found"
+    fi
   fi
 else
   run_step_skip "04a" "test" "--from"
@@ -112,7 +135,11 @@ fi
 
 # ── 5. 빌드 ──
 if [ "$SKIP_BUILD" = false ]; then
-  run_step "05" "build" "npm run build" || exit 1
+  if [ "$HAS_PACKAGE_JSON" = false ]; then
+    run_step_skip "05" "build" "no package.json (template state)"
+  else
+    run_step "05" "build" "npm run build" || exit 1
+  fi
 else
   run_step_skip "05" "build" "--from"
 fi
