@@ -10,7 +10,7 @@
 
 ## 백업 아키텍처 개요
 
-모든 운영 프로젝트는 다음 3계층 백업 체계를 갖춰야 합니다:
+모든 운영 프로젝트는 다음 4계층 백업 체계를 갖춰야 합니다:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -22,8 +22,18 @@
 ├─────────────────────────────────────────────────────┤
 │  3. 배포 전 자동 백업 (CI/CD)                          │
 │     CI workflow → {DB}_predeploy_{DATE}.sql.gz        │
+├─────────────────────────────────────────────────────┤
+│  4. 마이그레이션 전 자동 백업 (db-migrate.sh 래퍼)     │
+│     → state/db-backups/pre-migrate-{TS}.dump.gz       │
+│     실패 시 복원 명령 자동 출력                         │
+│     (상세: docs/agents/migration-rules.md)            │
 └─────────────────────────────────────────────────────┘
 ```
+
+각 계층의 역할이 다릅니다:
+- 1·2계층은 **일상 재해 복구** (하드웨어 장애, 실수)
+- 3계층은 **배포 롤백** (코드 버그로 인한 데이터 오염)
+- 4계층은 **스키마 변경 보호** (마이그레이션 실패/데이터 유실) — 가장 빈번, 가장 피하기 쉬운 사고
 
 ## 필수 수집 정보
 
@@ -205,6 +215,24 @@ send_notification() {
 | 파일 손상   | `[BACKUP CORRUPTED]`    |
 | 동기화 성공 | `[OFFSITE SYNC OK]`     |
 | 동기화 실패 | `[OFFSITE SYNC FAILED]` |
+
+## 마이그레이션 전 자동 백업 (4계층)
+
+DB 스키마 마이그레이션은 데이터 유실 사고가 가장 자주 일어나는 지점입니다. `scripts/db-migrate.sh` 래퍼가 다음 순서를 강제합니다:
+
+1. 마이그레이션 대상 DB에 대해 `pg_dump` 실행
+2. 출력물을 `state/db-backups/pre-migrate-{PROJECT}-{TIMESTAMP}.dump.gz`에 저장 + 크기 검증
+3. 마이그레이션 실행 (`prisma migrate deploy`, `flyway migrate` 등)
+4. 성공 시: 덤프는 `state/db-backups/`에 **14일 보관** 후 자동 삭제
+5. 실패 시: 복원 명령을 콘솔에 출력 + `state/db-backups/` 에서 영구 보존
+
+복원 예시:
+```bash
+gunzip < state/db-backups/pre-migrate-myapp-20260417_143012.dump.gz \
+  | docker exec -i <접두사>-db pg_restore -U <user> -d <db> --clean --if-exists
+```
+
+상세 규칙과 복구 절차는 `docs/agents/migration-rules.md` 참조.
 
 ## 복원 절차
 
