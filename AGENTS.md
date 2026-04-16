@@ -68,10 +68,22 @@
 - `docs/agents/security-rules.md`
 - `docs/agents/performance-rules.md`
 - `docs/agents/deploy-rules.md`
+- `docs/agents/docker-rules.md`
+- `docs/agents/migration-rules.md`
 - `docs/agents/workflow-rules.md`
 - `docs/agents/feedback-rules.md`
 - `docs/agents/backup-rules.md`
 - `docs/agents/seo-rules.md`
+
+## Docker & DB 작업 의무 규칙
+
+Docker 컨테이너 또는 DB 마이그레이션 작업 시작 전 **반드시**:
+
+1. 환경(dev/prod) 의도를 명시적으로 선언하고, `./scripts/docker-guard.sh --env <환경>` 실행
+2. 마이그레이션은 `./scripts/db-migrate.sh --cmd "<원본 명령>"` 래퍼로만 실행 (직접 `prisma migrate deploy` 금지)
+3. `docker compose down -v` / `--volumes` 절대 금지 (DB 데이터 영구 유실). Claude Code 세션에서는 PreToolUse hook이 자동 차단
+4. 같은 접두사의 컨테이너가 이미 있으면 새로 만들지 말고 기존 compose 수정 (`docs/agents/docker-rules.md §3`)
+5. compose 파일 최상단에 `name:` + `x-environment:` 라벨 필수
 
 ## Tooling rules
 
