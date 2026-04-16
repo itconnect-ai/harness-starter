@@ -18,11 +18,6 @@ Phase B: Claude Code (품질 보장, Epic 단위)
   bmad-code-review → 오류 직접 수정 → 테스트 보강
 ```
 
-## 사전 조건
-
-- Claude Code CLI, Codex Desktop, Git, Node.js 20+
-- jq 설치 완료 (`brew install jq` 또는 `sudo apt-get install -y jq`)
-
 ---
 
 ## 셋업 순서
