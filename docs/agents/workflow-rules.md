@@ -66,6 +66,19 @@ Phase B 완료 후 실행:
 8. **`.claude/hooks/`는 Claude Phase B에만 적용됨** — 공통 강제는 `scripts/validate.sh` 또는 CI 우선
 9. **완료 기준**: harness 파일(validate.sh, rules, hooks)을 수정했으면 반드시 `bash -n scripts/validate.sh && ./scripts/validate.sh` 재실행하여 harness 자체가 깨지지 않았는지 확인
 10. 검증 통과 후 커밋: `chore(harness): Epic N 회고 반영`
+11. **브랜치 정리**: 이번 Epic의 story 브랜치와 merged된 임시 브랜치를 정리
+    ```bash
+    # 먼저 dry-run으로 대상 확인
+    ./scripts/cleanup-branches.sh
+
+    # 확인 후 실제 실행
+    ./scripts/cleanup-branches.sh --apply
+    ```
+    - main과 develop 양쪽에 merged된 것만 삭제 대상
+    - 보호 브랜치: `main`, `develop`, `release/*`, `hotfix/*`
+    - **복구 보장**: 삭제 전에 `archive/<branch-name>/<YYYYMMDD>` 태그를 생성하고 원격에 push.
+      commit 히스토리는 태그로 영구 보존됨. 복구하려면:
+      `git checkout -b restored archive/<branch>/<date>`
 
 feedback-rules.md 운영 규칙:
 - 최대 10개 active rule만 유지
@@ -91,7 +104,7 @@ BMAD 풀코스가 필요 없는 간단한 작업:
 - Phase B에서 APPROVED 후 **develop에 merge** (main 직접 push 금지)
 - CI가 develop에서 통과하면 develop → main 승격 PR 생성
 - main과 develop은 항상 검증 통과 상태 유지
-- merge된 story 브랜치는 자동 정리됨 (`.github/workflows/cleanup-stale-branches.yml`)
+- merge된 story 브랜치는 Phase C 회고 단계에서 `scripts/cleanup-branches.sh`로 정리됨 (archive tag로 복구 보존)
 
 ## 실패 처리
 
