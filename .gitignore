@@ -54,5 +54,9 @@ yarn-error.log*
 docs/org/docker-port-registry.md
 docs/org/*.local.md
 
+# private/: 외부 공개 금지 내부 정보 (README.md만 커밋)
+private/*
+!private/README.md
+
 # DB 마이그레이션 전 자동 백업 (db-migrate.sh가 생성)
 state/db-backups/

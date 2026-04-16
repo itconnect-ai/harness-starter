@@ -311,6 +311,42 @@ feature/ 브랜치의 변경 사항을 리뷰하고 수정해줘.
 
 ---
 
+## Docker / DB 작업 지시 표준
+
+AI에게 Docker 또는 DB 마이그레이션 작업을 시키실 때는 **환경을 한국어로 명시**하세요. "dev", "prod" 같은 영어 약어는 사용자-AI 사이 혼동을 유발합니다.
+
+### 표준 지시 문구
+
+```
+<프로젝트명> 개발 환경으로 docker 구성해
+<프로젝트명> 운영 환경으로 docker 구성해
+<프로젝트명> 개발 환경에서 마이그레이션 돌려
+<프로젝트명> 운영 환경에 배포용 compose 만들어
+```
+
+이 문구를 받으면 AI는 자동으로 다음을 수행:
+
+1. `./scripts/docker-guard.sh --env development|production`로 현재 compose 상태 검증
+2. compose 파일의 `name:` (운영=`<접두사>` vs 개발=`<접두사>-dev`)과 `x-environment:` (`production` vs `development`) 라벨이 지시와 일치하는지 교차 확인
+3. 불일치 또는 중복 컨테이너 감지 시 중단 후 보고
+4. 마이그레이션이면 `./scripts/db-migrate.sh --cmd "..." --env <환경>` 래퍼로 실행
+
+### 내부 값은 영어 유지
+
+지시 문구는 한국어이지만 **파일 값·CLI 인자는 영어**를 유지합니다 (범용성·도구 호환성):
+
+- `x-environment: production` / `x-environment: development`
+- `--env production` / `--env development`
+- 사용자가 `"개발 환경으로 구성해"` 라고 지시 → AI는 내부적으로 `--env development`로 변환
+
+### 상세 규칙
+
+- Docker 일반: `docs/agents/docker-rules.md`
+- 환경 분리·compose name 규칙: `docs/agents/deploy-rules.md`
+- DB 마이그레이션 안전: `docs/agents/migration-rules.md`
+
+---
+
 ## 파일 구조
 
 ```
@@ -330,6 +366,7 @@ feature/ 브랜치의 변경 사항을 리뷰하고 수정해줘.
 │   ├── hooks/
 │   │   ├── block-rm.sh                위험 명령 차단
 │   │   ├── check-feedback-rules.sh    세션 시작 시 활성 피드백 규칙 표시
+│   │   ├── docker-guard-hook.sh       docker/마이그레이션 명령 실행 전 안전 차단
 │   │   ├── run-checks.sh              편집 파일만 eslint (빠른 피드백)
 │   │   └── warn-uncommitted.sh        세션 종료 시 uncommitted changes 경고
 │   └── skills/                        Claude Code용 BMAD 스킬 (Phase B)
@@ -343,19 +380,26 @@ feature/ 브랜치의 변경 사항을 리뷰하고 수정해줘.
 ├── docs/
 │   ├── agents/
 │   │   ├── architecture-rules.md      아키텍처 경계, API 버저닝, health check
-│   │   ├── backup-rules.md            DB 백업 시스템 설계 규칙
+│   │   ├── backup-rules.md            DB 백업 시스템 설계 규칙 (4계층)
 │   │   ├── coding-rules.md            코드 작성, 로깅 표준, 환경변수
-│   │   ├── testing-rules.md           테스트 규칙, 격리, 2단계 검증
+│   │   ├── testing-rules.md           테스트 규칙, 격리, 4층 검증 체계
 │   │   ├── security-rules.md          보안 (시크릿, 인증, 입력검증, 에러노출)
 │   │   ├── performance-rules.md       성능 (N+1, LIMIT, 이벤트 cleanup)
-│   │   ├── deploy-rules.md            배포 (Docker, 포트, DB 보호, graceful shutdown)
+│   │   ├── deploy-rules.md            배포 (환경 분리, compose name 환경 접미사, graceful shutdown)
+│   │   ├── docker-rules.md            Docker 네이밍/포트/검증 일반 원칙
+│   │   ├── migration-rules.md         DB 마이그레이션 데이터 유실 방지
 │   │   ├── workflow-rules.md          Phase A/B/C 작업 흐름
 │   │   ├── feedback-rules.md          과거 실수 패턴 활성 교훈
 │   │   └── seo-rules.md              SEO/AEO/GEO 구현 규칙
+│   ├── changelog/                     하네스 개선 이력 (비개발자 요약 포함)
 │   ├── checklists/
 │   │   ├── page-update.md             페이지 수정 후 SEO/AEO/GEO 체크리스트
 │   │   └── pre-deploy.md              배포 전 체크리스트
-│   └── decisions/                     ADR
+│   ├── decisions/                     ADR
+│   └── org/
+│       └── docker-port-registry.template.md  조직 포트 레지스트리 template (복사 후 private/에 실제 값)
+│
+├── private/                           외부 공개 금지 내부 정보 (.gitignore로 보호, README.md만 커밋)
 │
 ├── templates/
 │   ├── execplan.md                    ExecPlan 템플릿
@@ -376,6 +420,8 @@ feature/ 브랜치의 변경 사항을 리뷰하고 수정해줘.
 │   ├── smoke.sh                       bash/WSL/macOS/Linux 스모크 테스트
 │   ├── smoke.ps1                      Windows PowerShell 스모크 테스트
 │   ├── cleanup-branches.sh            로컬+원격 merged 브랜치 정리 (archive tag로 복구 보존, Phase C에서 호출)
+│   ├── docker-guard.sh/.ps1           Docker 작업 전후 안전 검증 (환경 라벨 + 중복 컨테이너 감지)
+│   ├── db-migrate.sh/.ps1             DB 마이그레이션 안전 래퍼 (자동 pg_dump + 실패 시 복원 안내)
 │   └── status.sh                      진행 상태 대시보드
 │
 ├── _bmad-output/

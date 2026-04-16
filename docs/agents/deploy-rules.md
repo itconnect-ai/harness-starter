@@ -50,11 +50,15 @@ services:
 
 ### 환경 전환 체크리스트
 
-- [ ] compose 파일의 `name:` 값에 환경 접미사가 있는가 (또는 운영이면 없는가)
-- [ ] `x-environment:` 라벨이 compose 파일 최상단에 있는가
+- [ ] 사용자 지시 문구가 "개발 환경" 또는 "운영 환경"을 한국어로 명시하는가
+  - 표준 문구: `"<프로젝트명> 개발 환경으로 docker 구성해"` / `"<프로젝트명> 운영 환경으로 docker 구성해"`
+  - "dev", "prod" 등 영어 약어는 사용자-AI 간 혼동을 일으키므로 **지시 문구에서는 피함**
+  - 내부 플래그·라벨 값은 영어 유지: `--env development|production`, `x-environment: development|production`
+- [ ] compose 파일의 `name:` 값에 환경 접미사가 있는가 (개발이면 `-dev`, 운영이면 없음)
+- [ ] `x-environment:` 라벨이 compose 파일 최상단에 있는가 (값은 `production` 또는 `development`)
 - [ ] `--env-file` 플래그 또는 현재 셸의 환경변수가 해당 환경의 값을 가리키는가
-- [ ] `docker-guard.sh`로 사전 검증 통과했는가
-- [ ] 사용자 의도와 compose + .env + docker context가 3자 일치하는가
+- [ ] `docker-guard.sh --env <development|production>`로 사전 검증 통과했는가
+- [ ] 사용자 지시(개발/운영) + compose name + x-environment + .env 파일이 4자 일치하는가
 
 ## 포트 관리
 

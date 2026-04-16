@@ -79,11 +79,14 @@
 
 Docker 컨테이너 또는 DB 마이그레이션 작업 시작 전 **반드시**:
 
-1. 환경(dev/prod) 의도를 명시적으로 선언하고, `./scripts/docker-guard.sh --env <환경>` 실행
+1. **환경(개발/운영) 의도를 한국어로 명시적으로 선언** 후 작업. 사용자 지시 표준 문구:
+   - `"<프로젝트명> 개발 환경으로 docker 구성해"` → `--env development`
+   - `"<프로젝트명> 운영 환경으로 docker 구성해"` → `--env production`
+   이후 `./scripts/docker-guard.sh --env <development|production>` 실행
 2. 마이그레이션은 `./scripts/db-migrate.sh --cmd "<원본 명령>"` 래퍼로만 실행 (직접 `prisma migrate deploy` 금지)
 3. `docker compose down -v` / `--volumes` 절대 금지 (DB 데이터 영구 유실). Claude Code 세션에서는 PreToolUse hook이 자동 차단
 4. 같은 접두사의 컨테이너가 이미 있으면 새로 만들지 말고 기존 compose 수정 (`docs/agents/docker-rules.md §3`)
-5. compose 파일 최상단에 `name:` + `x-environment:` 라벨 필수
+5. compose 파일 최상단에 `name:` + `x-environment:` 라벨 필수 (`x-environment` 값은 `production` 또는 `development`)
 
 ## Tooling rules
 

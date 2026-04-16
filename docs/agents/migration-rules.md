@@ -208,11 +208,11 @@ docker volume rm <이전-볼륨>
 
 마이그레이션 작업 시작 전 AI는 다음을 확인해야 합니다:
 
-- [ ] 대상 환경이 dev인지 prod인지 명확히 인지했는가 (`x-environment:` 라벨)
+- [ ] 사용자 지시가 "개발 환경" 또는 "운영 환경"을 한국어로 명시했는가. compose 파일의 `x-environment:` 라벨과 일치하는가
 - [ ] `scripts/db-migrate.sh` 래퍼가 존재하는가 (없으면 먼저 생성)
 - [ ] 마이그레이션 파일이 reversible인가, irreversible이면 헤더 주석에 명시되었는가
 - [ ] `DROP COLUMN/TABLE`/RENAME이 포함되면 2단계 마이그레이션 계획을 세웠는가
-- [ ] 운영 환경 마이그레이션이면 사용자의 명시적 승인을 받았는가
+- [ ] 운영 환경 마이그레이션이면 사용자의 명시적 승인을 받았는가 (`db-migrate.sh --env production --force-irreversible` 조합이 필요한 경우 별도 확인)
 
 ---
 
