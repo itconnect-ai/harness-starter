@@ -9,6 +9,12 @@
             "if": "Bash(rm *)",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-rm.sh",
             "statusMessage": "Checking for destructive commands..."
+          },
+          {
+            "type": "command",
+            "if": "Bash(docker *) || Bash(npx prisma *) || Bash(prisma *) || Bash(flyway *) || Bash(alembic *)",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/docker-guard-hook.sh",
+            "statusMessage": "Checking docker/migration safety..."
           }
         ]
       }
