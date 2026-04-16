@@ -1,18 +1,27 @@
 # .github/workflows/ci.yml
 #
-# Phase B에서 main에 merge할 때 마지막 안전망.
-# ⚠️ 4단계 프로젝트 초기화 후 기술 스택에 맞게 수정하세요.
+# Quality gate — develop와 main push/PR에 작동하는 독립 검증 계층.
+# 로컬 validate.sh와 일부 명령이 겹치지만, CI 전용 가치는 다음에 집중:
+#   - 깨끗한 node_modules (npm ci)
+#   - coverage 수집
+#   - 보안 audit (npm audit)
+#   - Dockerfile 있으면 이미지 빌드 검증
 #
-# 이 파일은 Node.js 기본 템플릿입니다.
-# Python, Go 등 다른 스택이면 steps를 교체하세요.
+# 배포는 .github/workflows/deploy.yml 담당 (main push만).
+#
+# ⚠️ 4단계 프로젝트 초기화 후 기술 스택에 맞게 수정하세요.
 
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality-gate:
@@ -33,7 +42,7 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      - name: Tests
+      - name: Tests with coverage
         run: npm run test -- --coverage
 
       - name: Regression tests
@@ -47,6 +56,52 @@ jobs:
       - name: Build
         run: npm run build
 
+      # ── CI 전용 체크 (로컬 validate.sh와 중복되지 않는 영역) ──
+
       - name: Security audit
         run: npm audit --audit-level=high
         continue-on-error: true
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.sha }}
+          path: coverage/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  docker-build:
+    # Dockerfile이 있을 때만 실행되는 이미지 빌드 검증
+    runs-on: ubuntu-latest
+    needs: quality-gate
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Dockerfile
+        id: check
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No Dockerfile found — skipping docker-build"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.found == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (validation only, no push)
+        if: steps.check.outputs.found == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ github.event.repository.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

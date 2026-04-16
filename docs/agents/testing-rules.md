@@ -39,13 +39,24 @@
 validate.sh는 `--no-threads` (Vitest) 또는 `--runInBand` (Jest)로 순차 실행합니다.
 격리 규칙이 충분히 정착되면 병렬 실행으로 전환할 수 있습니다.
 
-## 2단계 검증 체계
+## 4층 검증 체계 (Inner Loop → Outer Loop)
 
-| 시점 | 스크립트 | 범위 | 목적 |
-|---|---|---|---|
-| Story 완료 시 | `validate-quick.sh` | lint + typecheck + 변경 파일 관련 테스트 | 빠른 피드백 (30초 이내) |
-| Epic 완료 시 | `validate.sh` | 전체 (의존성 + 타입 + 린트 + 전체 테스트 + 빌드 + 보안 + 성능) | 통합 검증 |
+각 계층이 **고유한 가치**를 가지도록 설계. 모든 계층이 같은 것을 돌리면 중복 낭비이지만, 서로 다른 관점에서 검증하면 Defense in Depth가 된다.
 
+| 시점 | 도구 | 범위 | 고유 가치 | 예상 시간 |
+|---|---|---|---|---|
+| Story 완료 (로컬) | `validate-quick.sh` | 변경 파일 lint + typecheck + 관련 테스트 | 빠른 피드백 (inner loop) | < 60초 |
+| Epic 완료 (로컬) | `validate.sh` | 전체 typecheck/lint/test/build + **grep 기반 security/perf/blocking 체크** | 로컬 특화 패턴 검증 (CI에 없음) | 3~5분 |
+| develop push (원격) | `.github/workflows/ci.yml` | 깨끗한 npm ci + 전체 검증 + **coverage + npm audit + docker build 검증** | 환경 독립 검증 + 보안 감사 | 5~8분 |
+| main push (원격) | `.github/workflows/deploy.yml` | **사내 Docker 서버로 배포 + (옵션) pre-backup + post-smoke** | 프로덕션 배포 게이트 | 5~10분 |
+
+### 중복 전략
+
+- **네 계층이 lint/typecheck/test/build를 반복 실행**하는 것은 의도된 redundancy (Defense in Depth). 빠르고 싼 체크는 여러 번 돌려도 무방.
+- **각 계층 고유 영역은 중복되지 않게**:
+  - 로컬 validate.sh만 하는 것: grep 기반 security/perf/blocking 체크 (CI에서는 불필요)
+  - CI만 하는 것: coverage 수집, npm audit, Dockerfile 검증
+  - Deploy만 하는 것: 실제 서버 적용
 - Story 단위에서는 전체 테스트를 돌리지 않음 (아직 구현 안 된 Story의 테스트 실패 방지)
 - Epic 단위에서 전체 테스트를 순차 실행하여 병렬 충돌 없이 통합 검증
 - validate.sh 실패 시 `--from=실패단계`로 해당 단계부터 재개 가능

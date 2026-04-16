@@ -18,6 +18,10 @@
 *.sh text eol=lf
 *.bash text eol=lf
 
+# ── Git hooks (확장자 없음): 항상 LF 강제 ──
+.githooks/* text eol=lf
+.git/hooks/* text eol=lf
+
 # ── 설정/데이터 파일: 항상 LF (Docker, CI, 서버 환경에서 사용) ──
 *.yml text eol=lf
 *.yaml text eol=lf

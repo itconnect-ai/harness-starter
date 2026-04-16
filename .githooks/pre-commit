@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# ============================================================================
+# .githooks/pre-commit
+#
+# Commit 직전 실행되는 git hook.
+# 설계: 느리지 않게, 실패 가능성 낮게, 템플릿 상태에서도 작동.
+#
+# 활성화: scripts/setup/install-git-hooks.sh 실행 (또는 .ps1)
+# 비활성화: git config --unset core.hooksPath
+# ============================================================================
+set -e
+
+# ── 1. 스테이징된 JS/TS 파일만 eslint ──
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null || true)
+
+if [ -n "$STAGED_FILES" ] && [ -f package.json ] && [ -x node_modules/.bin/eslint ]; then
+  echo "pre-commit: linting $(echo "$STAGED_FILES" | wc -l | tr -d ' ') staged file(s)..."
+  # shellcheck disable=SC2086
+  echo "$STAGED_FILES" | xargs -r npx eslint
+fi
+
+# ── 2. .env 파일 커밋 차단 ──
+if git diff --cached --name-only | grep -qE '^\.env(\.[a-zA-Z]+)?$'; then
+  # .env.example은 허용
+  if ! git diff --cached --name-only | grep -E '^\.env(\.[a-zA-Z]+)?$' | grep -qv '\.example$'; then
+    :  # .example만 staged — OK
+  else
+    echo "ERROR: .env file is being committed. Remove it with 'git reset HEAD <file>'." >&2
+    exit 1
+  fi
+fi
+
+# ── 3. 커밋 크기 경고 (정보용, 차단 아님) ──
+CHANGED_LINES=$(git diff --cached --numstat 2>/dev/null | awk '{ adds += $1; dels += $2 } END { print adds+dels+0 }')
+if [ "${CHANGED_LINES:-0}" -gt 1000 ]; then
+  echo "pre-commit: WARN — large commit ($CHANGED_LINES lines). Consider splitting." >&2
+fi
+
+exit 0

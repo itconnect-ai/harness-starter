@@ -60,7 +60,7 @@ Codex Desktop이 구현한 Epic 전체를 리뷰하고 수정할 때의 규칙:
 
 ### 완료
 
-- 모든 story APPROVED 후 main에 merge
+- 모든 story APPROVED 후 **develop** 브랜치에 merge (회사 표준: develop → CI → main → 자동 배포)
 - sprint-status.yaml 업데이트 (review → done)
 
 ## 역할 3: 가벼운 작업 (Quick Flow)

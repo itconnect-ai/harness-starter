@@ -7,17 +7,24 @@
 # 전체 검증(validate.sh)은 Epic 완료 시 실행합니다.
 #
 # 사용법:
-#   ./scripts/validate-quick.sh                          # summary 모드 (기본)
+#   ./scripts/validate-quick.sh                               # summary 모드 (기본)
 #   VALIDATE_OUTPUT_MODE=verbose ./scripts/validate-quick.sh  # 전체 출력
+#   VALIDATE_BASE_REF=origin/develop ./scripts/validate-quick.sh  # base ref 지정
 #
 # 환경변수:
 #   VALIDATE_OUTPUT_MODE  summary (기본) | verbose
+#   VALIDATE_BASE_REF     비교 기준 브랜치 (기본: origin/develop → develop → origin/main → main 자동 탐색)
 #
 # 로그 위치:
 #   state/validate/latest/*.log   (최신 실행)
 #   state/validate/quick-*/*.log  (timestamped 아카이브)
 #
 # 종료코드: 0 = 성공, 1 = 실패
+#
+# 설계 원칙:
+#   - 전체 테스트 suite로 silent fallback 하지 않음 (story 단위 검증이 느려지는 주 원인)
+#   - 도구(vitest/jest)가 없으면 명시적 ERROR로 알림
+#   - 템플릿 상태(package.json 없음)에서는 우아하게 SKIP
 # ============================================================================
 set -e
 
@@ -28,23 +35,80 @@ source "${SCRIPT_DIR}/lib/validate-utils.sh"
 # ── 초기화 ──
 init_validate "quick"
 
+# ── 기준 브랜치 결정 ──
+BASE_REF="${VALIDATE_BASE_REF:-}"
+if [ -z "$BASE_REF" ]; then
+  for ref in origin/develop develop origin/main main; do
+    if git rev-parse --verify "$ref" >/dev/null 2>&1; then
+      BASE_REF="$ref"
+      break
+    fi
+  done
+fi
+
 # ── 1. 타입 체크 ──
-run_step "01" "typecheck" "npm run typecheck 2>&1 || npx tsc --noEmit 2>&1" || exit 1
+if [ ! -f package.json ]; then
+  run_step_skip "01" "typecheck" "no package.json (template state)"
+else
+  TYPECHECK_CMD=""
+  if grep -q '"typecheck"' package.json 2>/dev/null; then
+    TYPECHECK_CMD="npm run typecheck"
+  elif [ -f tsconfig.json ] && [ -x node_modules/.bin/tsc ]; then
+    # tsc --incremental로 증분 캐시 활용 (story 단위에서 특히 효과적)
+    TYPECHECK_CMD="npx tsc --noEmit --incremental"
+  fi
+
+  if [ -z "$TYPECHECK_CMD" ]; then
+    run_step_skip "01" "typecheck" "no typecheck script or tsc binary"
+  else
+    run_step "01" "typecheck" "$TYPECHECK_CMD" || exit 1
+  fi
+fi
 
 # ── 2. 린트 ──
-run_step "02" "lint" "npm run lint" || exit 1
+if [ ! -f package.json ]; then
+  run_step_skip "02" "lint" "no package.json (template state)"
+elif ! grep -q '"lint"' package.json 2>/dev/null; then
+  run_step_skip "02" "lint" "no lint script in package.json"
+else
+  run_step "02" "lint" "npm run lint" || exit 1
+fi
 
 # ── 3. 변경된 파일 관련 테스트만 실행 ──
-CHANGED=$(git diff --name-only main -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null | tr '\n' ' ')
-
-if [ -z "$CHANGED" ]; then
-  run_step_skip "03" "related-tests" "no changed source files"
+# 설계: base ref 대비 변경된 소스 파일이 있을 때만 실행.
+# 전체 테스트 suite로 silent fallback 하지 않음 — 도구가 없으면 ERROR로 알림.
+if [ ! -f package.json ]; then
+  run_step_skip "03" "related-tests" "no package.json (template state)"
+elif [ -z "$BASE_REF" ]; then
+  run_step_skip "03" "related-tests" "no base ref found (develop/main)"
 else
-  # vitest --changed 또는 jest --changedSince 시도
-  # 실패 시 전체 테스트 fallback (출력은 로그 파일로 제한)
-  run_step "03" "related-tests" \
-    "npx vitest run --changed main --reporter=verbose 2>&1 || npx jest --changedSince=main --passWithNoTests 2>&1 || npm run test 2>&1" \
-    || exit 1
+  CHANGED=$(git diff --name-only "$BASE_REF" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null | tr '\n' ' ')
+
+  if [ -z "$CHANGED" ]; then
+    run_step_skip "03" "related-tests" "no changed source files vs $BASE_REF"
+  else
+    TEST_CMD=""
+    if [ -x node_modules/.bin/vitest ]; then
+      TEST_CMD="npx vitest run --changed $BASE_REF --reporter=verbose"
+    elif [ -x node_modules/.bin/jest ]; then
+      TEST_CMD="npx jest --changedSince=$BASE_REF --passWithNoTests"
+    fi
+
+    if [ -z "$TEST_CMD" ]; then
+      echo ""
+      echo "[03] related-tests        ERROR" >&2
+      echo "Story-level validation requires vitest or jest to run related tests only." >&2
+      echo "Install one of:" >&2
+      echo "  npm install -D vitest" >&2
+      echo "  npm install -D jest" >&2
+      echo "" >&2
+      echo "Full test suite is intentionally NOT used as fallback — it makes per-story" >&2
+      echo "validation too slow (5-10min). Use validate.sh for full-suite runs." >&2
+      exit 1
+    fi
+
+    run_step "03" "related-tests" "$TEST_CMD" || exit 1
+  fi
 fi
 
 # ── 완료 ──

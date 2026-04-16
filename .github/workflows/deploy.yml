@@ -1,0 +1,113 @@
+# .github/workflows/deploy.yml
+#
+# main 브랜치 push + CI 통과 시 사내 자체 서버의 Docker로 자동 배포.
+#
+# 트리거: CI workflow(ci.yml)가 main에서 성공한 직후 실행.
+#   (workflow_run 방식으로 CI와 race condition 없이 순차 실행)
+#
+# 배포 방식 (2가지 옵션 중 택 1 — 아래 주석 참조):
+#   A. SSH로 사내 서버에 접속해 docker compose pull/up  (이 파일 기본 채택)
+#   B. GHCR로 image push → 서버가 pull (대안)
+#
+# 필요 secrets (repo settings):
+#   DEPLOY_HOST       — 사내 서버 IP/도메인
+#   DEPLOY_USER       — SSH 사용자
+#   DEPLOY_SSH_KEY    — SSH 개인키 (전용 deploy 키 권장)
+#   DEPLOY_APP_DIR    — 서버 내 앱 디렉토리 (예: /opt/haenss-app)
+#
+# ⚠️ 프로젝트별로 서버 구성이 달라 실제 배포 블록은 template placeholder.
+# 첫 프로젝트 적용 시 주석 제거하고 실제 명령으로 수정하세요.
+
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      # ── 배포 전 DB 백업 (docs/agents/backup-rules.md 참조) ──
+      # 서버에 접속해 backup.sh 실행 후 계속 진행. 실패 시 배포 중단.
+      # - name: Pre-deploy DB backup
+      #   uses: appleboy/ssh-action@v1.0.3
+      #   with:
+      #     host: ${{ secrets.DEPLOY_HOST }}
+      #     username: ${{ secrets.DEPLOY_USER }}
+      #     key: ${{ secrets.DEPLOY_SSH_KEY }}
+      #     script: |
+      #       cd ${{ secrets.DEPLOY_APP_DIR }}
+      #       ./scripts/backup.sh || exit 1
+
+      # ── 옵션 A: SSH로 서버에 접속해 git pull + docker compose ──
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_APP_DIR }}
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose pull || true
+            docker compose up -d --build
+            docker image prune -f
+
+      # ── 배포 후 smoke test ──
+      # 서버에서 health endpoint + critical path 확인
+      # - name: Post-deploy smoke test
+      #   uses: appleboy/ssh-action@v1.0.3
+      #   with:
+      #     host: ${{ secrets.DEPLOY_HOST }}
+      #     username: ${{ secrets.DEPLOY_USER }}
+      #     key: ${{ secrets.DEPLOY_SSH_KEY }}
+      #     script: |
+      #       cd ${{ secrets.DEPLOY_APP_DIR }}
+      #       ./scripts/smoke.sh || exit 1
+
+      # ── 옵션 B 대안: GHCR push (이 파일 대신 채택 시 주석 교체) ──
+      # - name: Login to GHCR
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Build and push
+      #   uses: docker/build-push-action@v5
+      #   with:
+      #     context: .
+      #     push: true
+      #     tags: |
+      #       ghcr.io/${{ github.repository }}:latest
+      #       ghcr.io/${{ github.repository }}:${{ github.sha }}
+      #     cache-from: type=gha
+      #     cache-to: type=gha,mode=max
+      # 서버에는 별도 스크립트(systemd timer 등)로 주기 pull 하거나
+      # webhook 수신 후 pull 하는 구조 구축.
+
+      - name: Notify deploy result
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "Deploy succeeded for main@${{ github.event.workflow_run.head_sha }}"
+          else
+            echo "Deploy FAILED for main@${{ github.event.workflow_run.head_sha }}"
+          fi
+          # TODO: Discord/Slack webhook 호출 추가 (docs/agents/backup-rules.md의 알림 패턴 참조)

@@ -45,8 +45,9 @@ Epic 전체를 대상으로:
 3. REJECTED 항목 직접 수정 (Edit/Write, Hooks 자동 작동)
 4. 누락 테스트 보강
 5. `./scripts/validate.sh` + `./scripts/smoke.sh` 최종 검증 (이미 Epic 단위 validate를 통과했으므로 재확인 성격)
-6. 모든 story APPROVED 후 main에 merge
-7. sprint-status.yaml 업데이트 (review → done)
+6. 모든 story APPROVED 후 **develop** 브랜치에 merge
+7. develop 푸시 시 GitHub CI 작동, 통과하면 develop → main으로 승격 (main push 시 자동 배포)
+8. sprint-status.yaml 업데이트 (review → done)
 
 ## Phase C: Claude Code 회고 + Harness 강화 (Epic 완료 후)
 
@@ -65,6 +66,19 @@ Phase B 완료 후 실행:
 8. **`.claude/hooks/`는 Claude Phase B에만 적용됨** — 공통 강제는 `scripts/validate.sh` 또는 CI 우선
 9. **완료 기준**: harness 파일(validate.sh, rules, hooks)을 수정했으면 반드시 `bash -n scripts/validate.sh && ./scripts/validate.sh` 재실행하여 harness 자체가 깨지지 않았는지 확인
 10. 검증 통과 후 커밋: `chore(harness): Epic N 회고 반영`
+11. **브랜치 정리**: 이번 Epic의 story 브랜치와 merged된 임시 브랜치를 정리
+    ```bash
+    # 먼저 dry-run으로 대상 확인
+    ./scripts/cleanup-branches.sh
+
+    # 확인 후 실제 실행
+    ./scripts/cleanup-branches.sh --apply
+    ```
+    - main과 develop 양쪽에 merged된 것만 삭제 대상
+    - 보호 브랜치: `main`, `develop`, `release/*`, `hotfix/*`
+    - **복구 보장**: 삭제 전에 `archive/<branch-name>/<YYYYMMDD>` 태그를 생성하고 원격에 push.
+      commit 히스토리는 태그로 영구 보존됨. 복구하려면:
+      `git checkout -b restored archive/<branch>/<date>`
 
 feedback-rules.md 운영 규칙:
 - 최대 10개 active rule만 유지
@@ -81,10 +95,16 @@ BMAD 풀코스가 필요 없는 간단한 작업:
 
 ## 브랜치 규칙
 
+회사 표준 흐름: `story/* → develop → main → 자동 배포`
+
 - story별 브랜치: `story/<story-이름>`
-- main은 항상 검증 통과 상태 유지
+- develop: 개발 통합 브랜치 (모든 story가 먼저 merge되는 곳)
+- main: 배포 브랜치 (push 시 사내 Docker 서버로 자동 배포)
 - Phase A에서는 story 브랜치에 커밋
-- Phase B에서 APPROVED 후 main에 merge
+- Phase B에서 APPROVED 후 **develop에 merge** (main 직접 push 금지)
+- CI가 develop에서 통과하면 develop → main 승격 PR 생성
+- main과 develop은 항상 검증 통과 상태 유지
+- merge된 story 브랜치는 Phase C 회고 단계에서 `scripts/cleanup-branches.sh`로 정리됨 (archive tag로 복구 보존)
 
 ## 실패 처리
 
