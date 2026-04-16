@@ -48,3 +48,11 @@ coverage/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Organization-specific info (contains internal IPs, domains, backup paths)
+# template 파일(.template.md)은 커밋, 실제 값 파일은 제외
+docs/org/docker-port-registry.md
+docs/org/*.local.md
+
+# DB 마이그레이션 전 자동 백업 (db-migrate.sh가 생성)
+state/db-backups/
