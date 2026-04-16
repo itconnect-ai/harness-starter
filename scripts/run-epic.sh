@@ -36,7 +36,7 @@
 #   - codex CLI 설치 및 로그인 완료
 #   - claude CLI 설치 및 로그인 완료
 #   - git 설정 완료
-#   - _bmad-output/planning-artifacts/epics/ 아래 story 파일 존재
+#   - _bmad-output/implementation-artifacts/ 아래 story 파일 존재
 #
 # ============================================================================
 set -uo pipefail
@@ -57,7 +57,8 @@ if [ -z "$EPIC_NUM" ]; then
 fi
 
 # 경로 (BMAD 기본 구조에 맞춤)
-EPIC_DIR="_bmad-output/planning-artifacts/epics/epic-${EPIC_NUM}"
+STORY_DIR="_bmad-output/implementation-artifacts"
+SPRINT_STATUS="${STORY_DIR}/sprint-status.yaml"
 STATE_DIR="state"
 STATE_FILE="${STATE_DIR}/epic-${EPIC_NUM}-progress.json"
 REVIEW_DIR="reviews/epic-${EPIC_NUM}"
@@ -398,14 +399,14 @@ main() {
   local stories=()
   while IFS= read -r -d '' file; do
     stories+=("$file")
-  done < <(find "$EPIC_DIR" -name "story-*.md" -print0 2>/dev/null | sort -zV)
+  done < <(find "$STORY_DIR" -maxdepth 1 -name "${EPIC_NUM}-*.md" ! -name "sprint-status.yaml" -print0 2>/dev/null | sort -zV)
 
   if [ ${#stories[@]} -eq 0 ]; then
-    log "No story files found in $EPIC_DIR"
-    log "  Expected files like: ${EPIC_DIR}/story-1.md, story-2.md, ..."
+    log "No story files found in $STORY_DIR matching pattern '${EPIC_NUM}-*.md'"
+    log "  Expected files like: ${STORY_DIR}/${EPIC_NUM}-1-story-name.md, ${EPIC_NUM}-2-story-name.md, ..."
     log ""
-    log "  Story 파일 이름이 다르면 위 find 패턴을 수정하세요."
-    log "  예: story-*.md -> *.story.md"
+    log "  Story files are flat files in _bmad-output/implementation-artifacts/"
+    log "  named with the epic number prefix (e.g., 1-1-auth-login.md for epic 1)."
     exit 1
   fi
 

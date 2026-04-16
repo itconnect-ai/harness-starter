@@ -51,8 +51,8 @@ Epic 전체를 대상으로:
 ## Phase C: Claude Code 회고 + Harness 강화 (Epic 완료 후)
 
 Phase B 완료 후 실행:
-1. `reviews/epic-N/` 아래 리뷰 결과 (*.md + logs/*-validate.log + *-codex.log) 분석
-2. `state/epic-N-progress.json`에서 failed/skipped story 확인
+1. `reviews/` 아래 리뷰 결과 (*.md + logs/*-validate.log + *-codex.log) 분석
+2. `_bmad-output/implementation-artifacts/sprint-status.yaml`에서 failed/skipped story 확인 (보조: `state/epic-N-progress.json` — run-epic.sh CLI 전용)
 3. 반복된 REJECTED 패턴과 validate 실패 패턴을 식별
 4. `feedback/incidents/`에 incident YAML 생성 (incident-template.yaml 참고)
 5. 각 incident에 대해 재현 테스트를 `tests/regression/`에 작성 (다음 Epic에서 자동 실행)
