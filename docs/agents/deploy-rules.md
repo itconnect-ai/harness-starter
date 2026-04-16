@@ -8,17 +8,67 @@
 
 ## 환경 분리
 
-- 개발 환경: `dev/docker-compose.dev.yml` + `.env.development`
-- 운영 환경: 루트 `docker-compose.yml` + `.env.production`
+같은 머신에서 개발(dev)과 운영(prod)이 공존할 수 있다는 전제로 설계합니다.
+
+### 파일 배치
+
+- 운영: `docker-compose.yml` + `.env.production`
+- 개발: `docker-compose.dev.yml` + `.env.development`
 - `.env.example`만 커밋 (실제 값 없이 변수 목록만)
+- `.env.development`, `.env.production`도 **기본적으로 Git 제외**. 필요 시 `.env.development.example` 템플릿만 커밋
 - 모든 설정값은 환경변수로 관리, 소스 코드에 하드코딩 금지
+
+### Compose project name 환경 접미사 (중복 충돌 방지)
+
+같은 머신에 dev/prod가 동시에 도는 상황에서 컨테이너·네트워크·볼륨 이름이 충돌하는 것을 막기 위해, compose 파일의 `name:` 필드에 **환경 접미사**를 붙입니다:
+
+| 환경 | compose name | 컨테이너 예시 | 네트워크 | 볼륨 |
+|---|---|---|---|---|
+| 운영 | `<접두사>` | `<접두사>-db` | `<접두사>-net` | `<접두사>_postgres_data` |
+| 개발 | `<접두사>-dev` | `<접두사>-dev-db` | `<접두사>-dev-net` | `<접두사>-dev_postgres_data` |
+
+중요: `<접두사>`는 `docker-rules.md §1-1`의 원칙대로 소문자 + 하이픈 없는 단어. `-dev` 접미사는 **compose name 레벨에서만** 추가하고, 컨테이너명의 역할 부분(`frontend`, `db` 등)은 건드리지 않습니다.
+
+### 환경 라벨 (AI 혼동 방지)
+
+AI 도구가 "지금 작업 대상이 dev인지 prod인지" 오인하는 사고를 막기 위해, **모든 compose 파일 최상단에 환경 라벨을 필수로** 기재합니다:
+
+```yaml
+name: <접두사>
+# dev 환경이면: name: <접두사>-dev
+
+x-environment: production
+# dev 환경이면: x-environment: development
+
+services:
+  ...
+```
+
+- `x-environment` 값은 `production`, `development`, `staging` 중 하나
+- AI는 docker 관련 작업 시작 전에 반드시 현재 작업 디렉토리의 compose 파일에서 `name:`과 `x-environment:`를 읽어 의도와 일치하는지 확인해야 함
+- 자동화: `./scripts/docker-guard.sh`가 compose 파일 + 현재 사용하는 `.env` + 사용자 의도의 3자 일치를 검증
+
+### 환경 전환 체크리스트
+
+- [ ] compose 파일의 `name:` 값에 환경 접미사가 있는가 (또는 운영이면 없는가)
+- [ ] `x-environment:` 라벨이 compose 파일 최상단에 있는가
+- [ ] `--env-file` 플래그 또는 현재 셸의 환경변수가 해당 환경의 값을 가리키는가
+- [ ] `docker-guard.sh`로 사전 검증 통과했는가
+- [ ] 사용자 의도와 compose + .env + docker context가 3자 일치하는가
 
 ## 포트 관리
 
 - 포트 번호를 소스 코드에 하드코딩하지 않음
 - docker-compose에서 `${PORT:-3000}` 패턴으로 환경변수 사용
 - 서비스 간 통신은 Docker 내부 DNS 사용 (포트 노출 불필요)
-- 프로젝트별 포트 레지스트리를 architecture 문서에 기록
+- 프로젝트별 포트 레지스트리는 `docs/org/docker-port-registry.md` (조직 내부 문서)를 따름
+- 포트 레지스트리가 없는 프로젝트는 조직 표준을 먼저 수립한 후 배포 진행
+
+## 데이터베이스 마이그레이션
+
+- 로컬/운영 어디서든 마이그레이션은 `scripts/db-migrate.sh`(또는 `.ps1`) 래퍼를 통해 실행
+- 마이그레이션 직전 자동 pg_dump, 실패 시 복원 명령 출력 (상세: `docs/agents/migration-rules.md`)
+- `prisma migrate deploy`, `flyway migrate` 등을 직접 호출하지 않음
 
 ## Dockerfile 최적화
 
