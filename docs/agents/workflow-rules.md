@@ -45,8 +45,9 @@ Epic 전체를 대상으로:
 3. REJECTED 항목 직접 수정 (Edit/Write, Hooks 자동 작동)
 4. 누락 테스트 보강
 5. `./scripts/validate.sh` + `./scripts/smoke.sh` 최종 검증 (이미 Epic 단위 validate를 통과했으므로 재확인 성격)
-6. 모든 story APPROVED 후 main에 merge
-7. sprint-status.yaml 업데이트 (review → done)
+6. 모든 story APPROVED 후 **develop** 브랜치에 merge
+7. develop 푸시 시 GitHub CI 작동, 통과하면 develop → main으로 승격 (main push 시 자동 배포)
+8. sprint-status.yaml 업데이트 (review → done)
 
 ## Phase C: Claude Code 회고 + Harness 강화 (Epic 완료 후)
 
@@ -81,10 +82,16 @@ BMAD 풀코스가 필요 없는 간단한 작업:
 
 ## 브랜치 규칙
 
+회사 표준 흐름: `story/* → develop → main → 자동 배포`
+
 - story별 브랜치: `story/<story-이름>`
-- main은 항상 검증 통과 상태 유지
+- develop: 개발 통합 브랜치 (모든 story가 먼저 merge되는 곳)
+- main: 배포 브랜치 (push 시 사내 Docker 서버로 자동 배포)
 - Phase A에서는 story 브랜치에 커밋
-- Phase B에서 APPROVED 후 main에 merge
+- Phase B에서 APPROVED 후 **develop에 merge** (main 직접 push 금지)
+- CI가 develop에서 통과하면 develop → main 승격 PR 생성
+- main과 develop은 항상 검증 통과 상태 유지
+- merge된 story 브랜치는 자동 정리됨 (`.github/workflows/cleanup-stale-branches.yml`)
 
 ## 실패 처리
 
