@@ -14,6 +14,7 @@
 
 target 프로젝트 루트에서 **install 스크립트로 필수 파일만** 가져옵니다. BMAD 스킬·changelog 등 template 전용 파일은 자동 제외되어 타 프로젝트 소스코드와의 충돌 위험이 없습니다.
 
+**bash / WSL / macOS / Linux:**
 ```bash
 # target 프로젝트 디렉토리에서 실행
 curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.sh | bash
@@ -24,6 +25,19 @@ bash install.sh --dry-run
 bash install.sh             # 실제 설치 (기존 파일은 skip)
 bash install.sh --force     # 기존 파일 덮어쓰기
 ```
+
+**Windows PowerShell** (Git Bash 자동 호출):
+```powershell
+# target 프로젝트 디렉토리에서 실행
+iwr https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.ps1 -UseBasicParsing | iex
+
+# 또는 다운로드 후 실행
+iwr https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.ps1 -OutFile install.ps1
+.\install.ps1 -DryRun
+.\install.ps1
+.\install.ps1 -Force
+```
+(Git for Windows 필요. 없으면 `winget install --id Git.Git -e`)
 
 이 방식은 약 **250개 필수 파일**만 복사합니다 (전체 clone은 ~2,400개).
 
@@ -425,6 +439,7 @@ AI에게 Docker 또는 DB 마이그레이션 작업을 시키실 때는 **환경
 │
 ├── scripts/
 │   ├── install.sh                     다른 프로젝트로 필수 파일만 install (tarball 기반)
+│   ├── install.ps1                    Windows PowerShell용 래퍼 (Git Bash 자동 호출)
 │   ├── lib/
 │   │   ├── validate-utils.sh          검증 공용 헬퍼 (래퍼, 로그, summary/verbose)
 │   │   └── powershell-utils.ps1       PowerShell용 Git Bash 호출 (WSL opt-in)
