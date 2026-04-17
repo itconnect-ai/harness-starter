@@ -1,188 +1,283 @@
 # 기존 프로젝트에 Harness 입히기 (Brownfield)
 
-이미 코드·CI·배포 파이프라인이 돌고 있는 프로젝트에 harness를 단계적으로 적용하는 가이드입니다.
+**2단계로 끝납니다**: install.sh 실행 → Claude Code에 아래 프롬프트 붙여넣기. AI가 기존 프로젝트를 분석하고 충돌 지점을 자동 병합합니다. 수동 편집 거의 없음.
+
 신규 프로젝트 셋업은 [README.md](README.md)를 참고하세요.
 
 ---
 
-## 핵심 원칙
+## 1단계: 필수 파일 설치
 
-**`install.sh`의 기본 모드가 이미 brownfield 친화적**입니다 — 기존 파일은 자동 skip하고 덮어쓰지 않습니다. `--force`는 쓰지 마세요.
+기존 프로젝트 루트에서:
 
 ```bash
-# 기존 프로젝트 루트에서
-curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.sh -o install.sh
-bash install.sh --dry-run   # 무엇이 설치되고 무엇이 skip될지 먼저 확인
-bash install.sh             # 실제 설치 (기존 파일 skip)
+curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.sh | bash
 ```
+
+기본 모드는 **기존 파일 skip** — 충돌 없이 안전. 이 시점에는 harness 파일이 단순 추가만 된 상태이고, 기존 워크플로는 영향을 받지 않습니다.
 
 ---
 
-## 3단계 롤아웃
+## 2단계: Claude Code에 통합 프롬프트 붙여넣기
 
-단일 big-bang 대신 **단계별로 적용**하세요. 한 번에 전부 켜면 어디서 깨졌는지 추적 불가.
+Claude Code를 열고 **아래 프롬프트 전체를 복사해서 실행**하세요.
 
-### Phase A — 문서만 (1주차: 팀 합의)
+````markdown
+# Harness Brownfield 통합
 
-install.sh가 자동으로 추가하는 것 (기존에 없으니 충돌 0):
+이 프로젝트는 기존 코드베이스입니다. 방금 `scripts/install.sh`로 harness
+필수 파일들이 추가됐습니다. 이제 기존 프로젝트 구성과 **충돌 없이 통합**
+해 주세요. 절대 기존 내용을 덮어쓰지 말고, 항상 읽은 뒤 병합하세요.
 
-- `docs/agents/` (12개 규칙 문서)
-- `docs/checklists/`, `docs/future-upgrades/`, `templates/`
-- `AGENTS.md`, `CLAUDE.md`, `REVIEW.md` (기존에 있으면 skip — **수동 병합 필요**, 아래 표 참고)
+## 작업 순서
 
-이 시점에는 harness가 **참고 자료로만** 작동합니다. 아무것도 강제되지 않으므로 팀이 편하게 읽고 합의할 수 있습니다.
+### 1. 현황 분석 (읽기만, 수정 금지)
 
-### Phase B — 검증 스크립트 + git hooks (2주차: 개발자 경험)
+다음을 병렬로 읽고 요약하세요:
+- `ls -la` 루트
+- `package.json`의 scripts 섹션 + 주요 dependencies
+- `.github/workflows/` 안의 모든 yml
+- 기존 `.gitignore`, `.gitattributes`
+- 기존 `CLAUDE.md`, `AGENTS.md`, `README.md` (있으면)
+- `.husky/` 디렉토리 존재 여부
+- 기존 `docker-compose*.yml`, `Dockerfile`
+- 주 언어 감지 (package.json 또는 파일 확장자 비율)
+- 테스트 러너 감지 (vitest/jest/mocha/pytest 등)
+- 패키지 매니저 감지 (package-lock/yarn.lock/pnpm-lock)
 
-```bash
-# 1. scripts/ 전체 (기존 이름 겹치는 것만 skip)
-# 2. .githooks/ + .claude/hooks/ + .claude/settings.json
-./scripts/setup/init-harness.sh   # git hooks 활성화 + (조건부) GitHub 보안 설정
+분석 결과를 아래 형식의 "## 통합 계획"으로 정리해 사용자에게 보여주세요:
+
+```
+## 통합 계획
+
+### 신규 설치 (충돌 없음, 그대로 유지)
+- [파일 목록]
+
+### 병합 대상 (기존 + harness 둘 다 있음)
+- .gitignore: [어떤 라인 추가할지]
+- .gitattributes: [추가할 규칙]
+- CLAUDE.md: [어떻게 병합]
+- AGENTS.md: [어떻게 병합]
+- .github/workflows/ci.yml: [기존 구조에 무엇을 추가]
+- .claude/settings.json: [hooks 어떻게 병합]
+- (기타)
+
+### 충돌 해결 필요
+- husky 감지됨 → [옵션 A/B 제안]
+- (기타)
+
+### 커스터마이징 대상 (프로젝트 스택 반영)
+- scripts/validate.sh: `npm run lint` → `[감지된 명령]`
+- .claude/hooks/run-checks.sh: 확장자 [.ts/.tsx → 실제]
+- docs/agents/coding-rules.md: 로거 [winston/pino/console 감지 결과]
+- docs/agents/testing-rules.md: 러너 [감지 결과]
+- (기타)
 ```
 
-**주의**: 기존에 **husky**가 있으면 아래 "husky 충돌 해결" 섹션 먼저 처리.
+### 2. 사용자 승인 대기
 
-이 시점부터:
-- `git commit`이 Conventional Commits 형식 검증
-- `git push`가 GitHub Secret Scanning 통과
-- `./scripts/validate.sh`로 로컬 검증 가능
+**중요**: 분석 출력 후 반드시 멈추고 "위 계획으로 진행할까요?" 라고
+물어보세요. 사용자 응답을 받기 전에는 어떤 파일도 수정하지 마세요.
 
-### Phase C — 자동화 (3주차 이후: CI/CD)
+사용자가 "진행" 또는 "yes"라고 하면 3번으로 진행. "아니오" 또는 특정
+항목 제외 요청이면 계획 수정 후 다시 승인 요청.
 
-```bash
-# 1. .github/workflows/ + .github/dependabot.yml
-# 2. setup-repo.sh로 Branch Protection 적용
-./scripts/setup/setup-repo.sh
+### 3. 단계별 자동 병합 (각각 독립 commit)
+
+각 단계 끝에 commit을 만들어 특정 단계만 rollback 가능하도록.
+
+**3-1. .gitignore 병합** (`chore(harness): merge .gitignore rules`)
+기존 파일 끝에 아래 헤더로 구분하여 append (중복 라인 제외):
+```
+# ── Harness Engineering rules ──────────────────────
+state/validate/
+state/db-backups/
+private/*
+!private/README.md
+docs/org/docker-port-registry.md
+docs/org/*.local.md
 ```
 
-이 시점부터:
-- PR은 CI + Gitleaks + CodeQL + Trivy 통과해야만 merge
-- Dependabot이 주간 PR 생성
-- `v*.*.*` 태그 push 시 GitHub Release 자동 생성
+**3-2. .gitattributes 병합** (`chore(harness): merge .gitattributes`)
+이미 `*.sh eol=lf` 없으면 추가. `.githooks/* eol=lf` 추가.
 
----
+**3-3. CLAUDE.md 병합** (`chore(harness): merge CLAUDE.md imports`)
+- 기존 CLAUDE.md가 있으면: @import 섹션이 없을 때만 파일 끝에 추가.
+  12개 규칙 파일 import 목록 추가.
+- "Build, Test & Quality" 섹션을 **package.json의 실제 scripts로 생성**.
+  예: `npm run lint`가 실제 존재하면 그대로, 없으면 `npx eslint .` 등.
+- 기존 CLAUDE.md 없으면 harness의 CLAUDE.md가 이미 설치된 상태이므로
+  "Build, Test & Quality" 부분만 실제 명령으로 교체.
 
-## 수동 병합 필요 — install.sh가 skip하는 영역
+**3-4. AGENTS.md 병합** (`chore(harness): merge AGENTS.md`)
+- 기존 AGENTS.md 있으면: "Docker & DB 작업 의무 규칙" 섹션 없을 때만
+  추가. Repo map 섹션을 실제 디렉토리 구조로 업데이트.
+- 없으면 harness의 것 유지.
 
-기존에 이미 있으면 install.sh가 건드리지 않습니다. **수동 병합**하세요:
+**3-5. husky 충돌 해결** (`chore(harness): resolve husky conflict`)
+`.husky/` 디렉토리가 있으면 사용자에게 선택지 제시:
+- **옵션 A (권장)**: harness로 통일. `npm uninstall husky` + 기존 husky
+  훅 내용을 `.githooks/pre-commit`에 병합 + `.husky/` 제거
+- **옵션 B**: husky 유지. `.githooks/*` 내용을 `.husky/`로 이동 +
+  `.githooks/` 제거. `core.hooksPath` 설정 안 함.
+사용자 선택 후 실행.
 
-| 기존 파일 | 병합 방법 |
-|---|---|
-| `README.md` | harness의 내용을 본인 README에 **append하지 말고**, `README-harness.md`로 저장해 참고 |
-| `CLAUDE.md` | "Build, Test & Quality" 섹션 + `@import` 목록을 본인 내용에 추가 |
-| `AGENTS.md` | "Docker & DB 작업 의무 규칙" + "참조 파일" 목록을 추가 |
-| `.gitignore` | `state/validate/`, `state/db-backups/`, `private/*`, `docs/org/docker-port-registry.md` 규칙 append |
-| `.gitattributes` | `*.sh eol=lf`, `.githooks/* eol=lf` append |
-| `.github/workflows/ci.yml` | **병합 필요**. Phase 1의 `quality-gate` job 이름만 맞추면 branch protection 작동. 기존 단계 유지 + 누락된 단계(coverage, audit 등) 추가 |
-| `.github/dependabot.yml` | 기존에 있으면 `updates:` 배열에 harness 항목 추가 |
-| `.claude/settings.json` | `hooks` 객체를 병합 (PreToolUse/PostToolUse/SessionStart/Stop 각각 배열 병합) |
-| `package.json` scripts | harness가 가정하는 이름과 맞추기: `lint`, `typecheck`, `test`, `build` |
+**3-6. CI workflow 병합** (`chore(harness): merge CI workflow`)
+`.github/workflows/ci.yml` 기존 파일이 있으면:
+- harness의 ci.yml과 diff해서 **누락된 step만 추가** (coverage, audit
+  upload, docker-build job 등)
+- 기존 job 이름이 `quality-gate`가 아니면 사용자에게 "branch protection
+  과 호환되도록 `quality-gate`로 rename할까요?" 질문
+- 기존 trigger(main/develop) 유지
+없으면 harness의 ci.yml 그대로 유지.
 
-**병합 명령 예시**:
-```bash
-# 기존 파일과 비교해서 어디를 병합해야 할지 diff로 확인
-bash install.sh --dry-run > install-plan.txt
-# 충돌 지점은 git stash + install.sh --force로 적용 + 수동 병합 후 stash pop
+**3-7. Dependabot 병합** (`chore(harness): merge dependabot`)
+`.github/dependabot.yml` 있으면 updates 배열에 없는 ecosystem만 추가.
+없으면 harness의 것 유지.
+
+**3-8. Claude Code hooks 병합** (`chore(harness): merge .claude/settings.json`)
+`.claude/settings.json` 있으면 hooks 객체의 각 배열(PreToolUse,
+PostToolUse, SessionStart, Stop)을 **명령 중복 없이** 병합.
+없으면 harness의 것 유지.
+
+**3-9. package.json scripts 검증** (필요 시 `chore(harness): add script aliases`)
+lint/typecheck/test/build 이름이 harness 가정과 일치하는지 확인.
+다른 이름이면 사용자에게 alias 추가 제안 후 동의 시 scripts에 추가.
+예: `"check": "tsc --noEmit"` 있으면 `"typecheck": "npm run check"` 제안.
+
+### 4. 스택별 커스터마이징 (`chore(harness): customize for {stack}`)
+
+감지된 스택 정보를 바탕으로 아래를 자동 수정:
+
+- `scripts/validate.sh`, `validate-quick.sh`의 npm 명령 → 감지된 패키지
+  매니저 명령으로 교체 (pnpm/yarn 사용 시)
+- `.claude/hooks/run-checks.sh`의 case 문 확장자를 실제 언어로 조정
+- `docs/agents/architecture-rules.md`에 실제 src 구조(api/components/
+  lib 등)를 "프로젝트 실제 구조" 섹션으로 추가
+- `docs/agents/coding-rules.md`에 감지된 로거 라이브러리 명시
+- `docs/agents/testing-rules.md`에 감지된 테스트 러너 + 현재 커버리지
+  수치(가능하면) 명시
+- `docs/agents/deploy-rules.md`에 감지된 배포 타겟(Dockerfile /
+  vercel.json / fly.toml / netlify.toml 등) 반영
+
+### 5. 검증 (`chore(harness): verify integration`)
+
+실행:
 ```
+./scripts/validate.sh
+```
+실패하면 원인 로그 분석 후 수정. 예를 들어 npm 명령 alias가 누락됐으면
+3-9단계로 돌아가 추가. 성공할 때까지 반복.
 
----
+### 6. git hooks 활성화
 
-## husky 충돌 해결
-
-harness는 `core.hooksPath` 방식을 쓰고 husky는 `.git/hooks/` 심링크 방식을 씁니다. **둘 다 유지 불가**.
-
-**옵션 1: harness로 통일 (권장)**
-```bash
-npm uninstall husky
-npx husky uninstall 2>/dev/null || true
-# 기존 husky 훅의 내용을 .githooks/pre-commit 등으로 옮기기
+```
 ./scripts/setup/install-git-hooks.sh
 ```
+성공 확인 후 다음으로.
 
-**옵션 2: husky 유지**
-```bash
-# harness의 .githooks/* 내용을 .husky/ 아래로 옮김
-cp .githooks/pre-commit .husky/pre-commit
-cp .githooks/commit-msg .husky/commit-msg
-rm -rf .githooks
-# setup/install-git-hooks.sh는 실행하지 않음
+### 7. GitHub 보안 설정 (조건부)
+
+`gh auth status`로 인증 확인:
+- 인증됨 + origin 있음: `./scripts/setup/setup-repo.sh` 실행
+- 아니면: skip하고 사용자에게 "나중에 gh auth login 후 수동 실행 필요"
+  안내.
+
+### 8. 최종 푸시
+
 ```
+git push
+```
+이전 단계들에서 만든 commit들이 순서대로 원격에 반영됨.
+
+### 9. 완료 보고
+
+다음을 짧게 요약해서 보여주기:
+- 추가된 파일 수 / 병합된 파일 수
+- husky 처리 결과
+- 주요 커스터마이징 (스택/로거/러너/배포 타겟)
+- validate 통과 여부
+- 다음 단계 안내:
+  - 팀에 "harness 도입됨" 공지
+  - `docs/agents/` 규칙 파일들을 팀이 읽고 피드백
+  - 첫 Epic을 Phase A/B/C 흐름으로 시험 적용
+
+## 강제 규칙 (절대 위반 금지)
+
+- **읽고 수정**: 모든 기존 파일은 반드시 먼저 읽은 뒤 수정. cat 후 diff
+  생성 후 적용.
+- **덮어쓰기 금지**: 기존 내용을 날리는 편집은 사용자가 명시 승인한
+  경우만. 기본은 append 또는 merge.
+- **단계별 commit**: 각 단계를 독립 commit으로 만들어 특정 단계만
+  rollback 가능하게. commit 메시지는 위 예시 그대로.
+- **실패 시 중단**: 어느 단계든 실패하면 stop하고 사용자에게 보고.
+  그때까지의 commit은 rollback 가능한 상태로 남아있음.
+- **승인 게이트**: 1단계 분석 직후 + 3-5(husky) + 3-6(CI rename)은
+  반드시 사용자 승인 후 진행.
+````
 
 ---
 
-## 적용 후 필수 커스터마이징
+## AI가 자동 처리하는 것 (요약)
 
-harness 규칙 파일들은 **일반론**으로 쓰여있어 기존 프로젝트에 맞게 조정해야 합니다:
+| 영역 | 처리 방법 |
+|---|---|
+| 신규 파일 설치 | install.sh가 skip-safe로 이미 처리 |
+| .gitignore / .gitattributes | 헤더 구분 후 append (중복 제외) |
+| CLAUDE.md / AGENTS.md | 누락 섹션만 추가, 기존 내용 보존 |
+| husky 충돌 | 사용자 선택 후 A(harness 통일) 또는 B(husky 유지) 자동 실행 |
+| CI workflow | 기존 구조 유지 + 누락 step만 추가 |
+| Dependabot | updates 배열에 누락 ecosystem 추가 |
+| Claude settings | hooks 객체 배열 병합 (중복 제거) |
+| package.json scripts | alias 제안 후 추가 |
+| 스택별 커스터마이징 | 감지된 정보로 규칙 파일·스크립트 자동 수정 |
+| 검증 | validate.sh 실패 시 자동 수정 후 재시도 |
+| 배포 | GitHub 인증 조건부 자동 실행 |
 
-- [ ] `docs/agents/architecture-rules.md` — 기존 레이어 구조 반영
-- [ ] `docs/agents/coding-rules.md` — 기존 ESLint/Prettier·로거 이름 반영
-- [ ] `docs/agents/testing-rules.md` — 실제 테스트 러너·커버리지 기준
-- [ ] `docs/agents/deploy-rules.md` — 실제 배포 타겟 반영
-- [ ] `docs/agents/docker-rules.md` — 기존 docker-compose 네이밍과 비교
-- [ ] `scripts/validate.sh` — `npm run lint` 부분을 실제 명령(`pnpm lint`, `yarn test` 등)으로
-- [ ] `.claude/hooks/run-checks.sh` — 변경 파일 확장자 조정 (Go면 `.go`, Python이면 `.py`)
-- [ ] `CLAUDE.md`의 "Build, Test & Quality" 섹션 — 실제 명령으로
-
----
-
-## 검증
-
-적용 후 실제로 작동하는지 확인:
-
-```bash
-# 1. validate가 기존 테스트와 잘 맞는지
-./scripts/validate.sh
-
-# 2. commit hook이 기존 워크플로우 안 깨는지
-echo "# test" >> temp.md && git add temp.md
-git commit -m "test(harness): verify hook"
-git reset HEAD~1 && rm temp.md
-
-# 3. 임시 PR로 CI 통과 확인
-git checkout -b chore/harness-integration
-git push -u origin chore/harness-integration
-gh pr create --draft --title "[test] harness integration"
-# CI 통과하면 harness가 정상 작동. 실패하면 로그 확인 후 수정.
-```
+**사용자가 직접 하는 일**:
+1. `curl | bash` 한 번
+2. Claude Code에 프롬프트 붙여넣기
+3. 2번 (husky 처리, CI rename) 승인 또는 선택
+4. 끝
 
 ---
 
 ## 롤백
 
-Phase별로 분리 적용했다면 역순으로 되돌릴 수 있습니다:
+각 단계가 독립 commit이므로 특정 단계만 되돌리기 쉽습니다:
 
 ```bash
-# Phase C 롤백 (workflow만 비활성화)
-mv .github/workflows/security.yml .github/workflows/security.yml.disabled
-mv .github/workflows/dependabot-auto-merge.yml ...disabled
-# 또는 Branch Protection의 required checks 해제 (GitHub UI)
+# 가장 최근 병합 되돌리기
+git reset --soft HEAD~1
 
-# Phase B 롤백 (git hooks 비활성화)
-git config --unset core.hooksPath
-# 또는
-rm -rf .githooks .claude/hooks .claude/settings.json
-
-# Phase A 롤백 (문서 제거 — 거의 할 일 없음)
-rm -rf docs/agents docs/checklists docs/future-upgrades templates
+# 특정 commit만 되돌리기 (예: husky 병합만 되돌림, 나머지 유지)
+git log --oneline | grep "harness"
+git revert <해당 commit SHA>
 ```
 
-harness 파일 전체를 한 번에 제거하려면:
+harness 전체를 제거하려면:
+
 ```bash
-# install.sh가 설치한 경로 기준으로 삭제
-# 단, 수동 병합한 파일(README/CLAUDE.md 등)은 개별 복구 필요
+# harness가 추가한 commit들을 한 번에 되돌리기 (날짜 기준)
+git log --since="2 hours ago" --format=%H --author="$(git config user.name)" | \
+  head -n $(git log --since="2 hours ago" --oneline | wc -l) | \
+  xargs -I {} git revert --no-edit {}
 ```
+
+단, `install.sh`가 단순 복사한 파일들(docs/agents/, scripts/ 등)은 git
+에 commit되어 있지 않을 수 있으므로 `git clean -n`으로 확인 후 제거.
 
 ---
 
-## 자주 발생하는 문제
+## 문제 해결
 
-| 증상 | 원인 | 해결 |
-|---|---|---|
-| `git commit` 시 "Conventional Commits 형식이 아닙니다" | commit 메시지가 `type(scope): description` 형식 아님 | 메시지 형식 맞추거나, 1회 허용은 `git commit --no-verify` |
-| `docker-guard-hook.sh`가 `prisma migrate deploy`를 차단 | 래퍼 미사용 | `./scripts/db-migrate.sh --cmd "prisma migrate deploy"` 사용 |
-| CI의 `required status checks` 이름 불일치 | 기존 job 이름이 `quality-gate`와 다름 | `setup-repo.sh`의 contexts 수정 또는 기존 CI job 이름을 `quality-gate`로 변경 |
-| Windows에서 `install.sh` 실행 실패 | Git Bash 미설치 또는 CRLF 문제 | Git for Windows 설치 + `git config core.autocrlf input` |
-| `validate.sh`가 template 상태 기준 skip 출력만 반복 | `package.json` 없거나 npm 스크립트 이름 불일치 | `scripts/validate.sh`의 `npm run *` 부분을 프로젝트 실제 명령으로 교체 |
+| 증상 | 해결 |
+|---|---|
+| AI가 승인 없이 파일 수정함 | 중단 + `git reset --hard HEAD~N`으로 되돌리고 프롬프트 다시 실행 |
+| validate.sh가 계속 실패 | AI가 7회 이상 수정 시도 중이면 중단 + 수동으로 `./scripts/validate.sh`를 실행해 에러 확인 |
+| husky 제거 후 기존 훅이 필요 | `.husky/` 삭제 전에 `.husky.backup/`으로 이동해 두고, 필요한 훅만 `.githooks/`로 옮김 |
+| CI가 기존 PR에서 실패 | `quality-gate` job 이름 rename이 기존 branch protection의 required checks와 불일치. GitHub UI에서 required checks 업데이트 |
+| Windows에서 install.sh 실행 안 됨 | Git Bash에서 실행. PowerShell은 지원 안 함 |
 
 ---
 
@@ -191,4 +286,3 @@ harness 파일 전체를 한 번에 제거하려면:
 - 전체 하네스 구조: [README.md](README.md)
 - 규칙 상세: [docs/agents/](docs/agents/)
 - 향후 확장 가이드: [docs/future-upgrades/](docs/future-upgrades/)
-- Docker/DB 작업 지시 표준: [README.md의 "Docker / DB 작업 지시 표준"](README.md) 섹션
