@@ -27,10 +27,11 @@ iwr https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/ins
 Claude Code를 열고 **아래 프롬프트 전체를 복사해서 실행**.
 
 > 지원 범위:
-> - **언어**: Node.js/TypeScript (1급), Python/Go/Rust/Java (감지 + 부분 지원)
-> - **CI**: GitHub Actions (1급), 다른 CI(GitLab/CircleCI/Jenkins/Bitbucket)는 감지 후 사용자에게 선택 요청
-> - **Monorepo**: npm/pnpm/yarn workspaces, turborepo, nx 감지 지원
+> - **언어**: Node.js/TypeScript (완전 지원), Python/Go/Rust/Java (감지 + 명령 매핑 지원)
+> - **CI**: GitHub Actions (완전 지원), 다른 CI(GitLab/CircleCI/Jenkins/Bitbucket/Azure)는 감지 후 사용자에게 처리 선택 요청
+> - **Monorepo**: npm/pnpm/yarn workspaces, turborepo, nx, lerna 감지 지원
 > - **실행 환경**: Claude Code의 Bash 도구(내부적으로 bash). Windows도 동일
+> - **멱등성**: 여러 번 실행해도 안전 (이미 병합된 내용은 skip, 백업은 타임스탬프로 구분)
 
 ````markdown
 # Harness Brownfield 통합
@@ -44,28 +45,49 @@ Claude Code를 열고 **아래 프롬프트 전체를 복사해서 실행**.
 
 아래 중 하나라도 실패하면 stop하고 사용자에게 보고:
 
-1. **install.sh 실행 확인**: `scripts/install.sh` 파일 존재?
-   없으면 → "1단계 install.sh를 먼저 실행해 주세요" 출력 후 중단.
+1. **install.sh 설치 결과물 확인** (install.sh 파일 자체가 아닌, 설치로
+   생긴 파일들):
+   ```bash
+   test -d docs/agents && test -f scripts/validate.sh && test -f .githooks/pre-commit
+   ```
+   위 3개 중 하나라도 없으면 → "1단계 install.sh(또는 install.ps1)를 먼저
+   실행해 주세요" 출력 후 중단.
 
-2. **git 상태 확인**: `git status --porcelain | wc -l`이 0이 아니면
-   uncommitted 변경 있음. 사용자에게 "stash하고 진행 / 먼저 commit / 중단"
-   중 선택 요청.
+2. **작업 디렉토리 고정**: 모든 명령을 프로젝트 루트에서 실행.
+   세션 시작 시 한 번:
+   ```
+   cd "$(git rev-parse --show-toplevel)"
+   ```
 
-3. **bash 환경 확인**: `[ -n "$BASH_VERSION" ] || command -v bash` — AI는
-   Claude Code의 Bash 도구를 쓰므로 자동 충족되지만, PowerShell cmdlet
-   호출은 **금지**. 모든 명령은 bash 문법.
+3. **git 상태 확인**: `git status --porcelain`의 출력이 비어있지 않으면
+   uncommitted 변경 있음. 사용자에게 아래 중 하나 선택 요청:
+   - `git stash push -m "pre-harness-integration"` 후 진행 (끝에 pop 안내)
+   - 먼저 `git commit` 후 진행
+   - 중단
 
-4. **작업 디렉토리 고정**: 모든 명령을 프로젝트 루트에서 실행.
-   `cd "$(git rev-parse --show-toplevel)"`로 이동.
+4. **PowerShell cmdlet 호출 금지**: AI가 Claude Code의 Bash 도구를 쓰는
+   한 bash 환경이 보장됨. 별도 체크 불필요. 단, 프롬프트 전반에서
+   PowerShell 전용 명령(`Remove-Item`, `Get-Content` 등) 호출 금지. 모든
+   명령은 bash 문법만 사용.
 
-5. **세션 TIMESTAMP 고정**: 아래를 세션 시작 시 **한 번만** 설정하고 이후
-   모든 백업 파일명에 재사용.
+5. **세션 TIMESTAMP 고정**: 아래를 세션 시작 시 **단 한 번** 설정하고
+   이후 모든 백업 파일명에 재사용.
    ```
    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
    ```
 
 6. **docs/legacy/ 디렉토리 사전 생성**:
-   `mkdir -p docs/legacy`
+   ```
+   mkdir -p docs/legacy
+   ```
+
+7. **멱등성 체크** (재실행 시): 이전 실행의 흔적이 있으면 중복 작업을
+   피하기 위해 감지:
+   - `git log --oneline | grep -c "chore(harness):"` — 이전 harness 통합
+     commit이 3개 이상이면 이미 실행됨. 사용자에게 "이미 harness 통합
+     이력 감지됨. 차이분만 적용할까요, 아니면 중단할까요?" 질문.
+   - `docs/legacy/*.bak` 파일이 있으면 이전 실행의 백업. 이번 실행은
+     `${TIMESTAMP}` 접미사로 자동 구분되므로 덮어쓰지 않음.
 
 ## 1. 현황 분석 (읽기만, 수정 금지)
 
@@ -247,11 +269,29 @@ git commit -m "chore(harness): merge .gitattributes"
 3-b. `@import` 지시 섹션이 없으면 파일 끝에 추가 (12개 규칙 파일 import).
 
 3-c. "Build, Test & Quality" 섹션을 **감지된 패키지 매니저 + scripts로
-생성/업데이트**. 예:
-- npm + lint/typecheck/test/build 존재: `npm run <각각>`
-- pnpm: `pnpm <각각>`
-- Python + pytest: `pytest`, `ruff check`, `mypy`
-- Go: `go vet ./...`, `go test ./...`, `go build ./...`
+생성/업데이트**. 4개 명령(lint / typecheck / test / build) 각각에 대해
+아래 매핑 참고:
+
+| 스택 | lint | typecheck | test | build |
+|---|---|---|---|---|
+| npm | `npm run lint` | `npm run typecheck` | `npm run test` | `npm run build` |
+| pnpm | `pnpm lint` | `pnpm typecheck` | `pnpm test` | `pnpm build` |
+| yarn | `yarn lint` | `yarn typecheck` | `yarn test` | `yarn build` |
+| Python (poetry) | `poetry run ruff check .` | `poetry run mypy .` | `poetry run pytest` | `poetry build` |
+| Python (uv) | `uv run ruff check .` | `uv run mypy .` | `uv run pytest` | `python -m build` |
+| Python (pip) | `ruff check .` | `mypy .` | `pytest` | `python -m build` |
+| Go | `gofmt -l . && go vet ./...` | (Go는 컴파일이 typecheck) | `go test ./...` | `go build ./...` |
+| Rust | `cargo fmt --check && cargo clippy -- -D warnings` | (Rust는 컴파일이 typecheck) | `cargo test` | `cargo build --release` |
+| Java (Maven) | `mvn checkstyle:check` | (컴파일이 typecheck) | `mvn test` | `mvn package` |
+| Java (Gradle) | `./gradlew check` | (컴파일이 typecheck) | `./gradlew test` | `./gradlew build` |
+
+**중요**:
+- npm만 `run` **필수**, pnpm/yarn은 `run` 생략 가능 (둘 다 허용, 프로젝트
+  기존 스타일 따름)
+- Go/Rust처럼 typecheck가 build에 통합된 언어는 해당 칸을 비우고 build만
+  명시 (프롬프트 결과물에도 해당 칸 생략 또는 "N/A — build에 통합")
+- 프로젝트별로 이 매핑과 다른 명령을 쓰면 실제 scripts/Makefile의 내용을
+  우선
 
 기존 CLAUDE.md 없으면 3-c만 수행 (install.sh로 이미 설치됨).
 
@@ -302,12 +342,16 @@ git commit -m "chore(harness): align README.md with harness"
   4. `npm uninstall husky` + package.json scripts에서 `"prepare":
      "husky install"` 제거
 
-- **옵션 B (husky 유지)**:
-  1. 기존 `.husky/pre-commit` 있으면 내용 병합(덮어쓰지 않음),
-     없으면 `.githooks/pre-commit`을 그대로 `.husky/`로 복사
-  2. `.husky/commit-msg`도 동일
-  3. `.githooks/` 제거
-  4. `core.hooksPath` 설정하지 않음
+- **옵션 B (husky 유지)**: (전제: `.husky/` 디렉토리가 이미 존재)
+  1. `.husky/pre-commit` 파일 처리:
+     - 이미 있으면 → 기존 내용 **상단에 유지**하고 `.githooks/pre-commit`
+       내용을 그 **아래에 append** (덮어쓰지 않음)
+     - 없으면 → `.githooks/pre-commit`을 `.husky/pre-commit`으로 복사
+  2. `.husky/commit-msg`도 동일 로직
+  3. `.githooks/` 디렉토리 제거 (중복 방지)
+  4. `core.hooksPath` 설정하지 않음 (husky가 자체 훅 경로 관리)
+  5. package.json에 `"prepare": "husky install"` (또는 husky 9의 `"prepare":
+     "husky"`)이 없으면 사용자에게 추가 제안
 
 ```
 git add -A
@@ -316,7 +360,36 @@ git commit -m "chore(harness): resolve husky conflict (option <A|B>)"
 
 **3-6. CI workflow 병합** (`chore(harness): merge CI workflow`)
 
-기존 `.github/workflows/ci.yml` 있으면:
+**D의 "기존 CI 처리" 답변에 따라 분기**:
+
+**옵션 a (기존 유지 + harness GH Actions 제거)**:
+- 감지된 비 GH Actions CI(GitLab 등) 유지
+- `rm .github/workflows/ci.yml .github/workflows/security.yml
+  .github/workflows/release.yml .github/workflows/deploy.yml
+  .github/workflows/dependabot-auto-merge.yml` — install.sh가 설치한 GH
+  Actions 파일 제거
+- `.github/dependabot.yml`은 유지 (Dependabot은 GitHub 기능이므로 기존 CI
+  시스템과 무관하게 작동)
+- 기존 CI에 Phase 1의 해당하는 job을 추가하라는 **안내만** 출력 (자동
+  변환은 위험 — skip)
+
+**옵션 b (병행)**:
+- 기존 비 GH Actions CI와 harness GH Actions 둘 다 유지
+- 두 시스템이 동시에 돌면 중복 실행 — 사용자에게 경고:
+  ```
+  ⚠ 기존 <GitLab CI 등>과 harness GH Actions가 동시에 빌드합니다.
+    CI 리소스·시간이 2배로 듭니다. 일정 기간 안정성 확인 후
+    옵션 a 또는 c로 전환 권장.
+  ```
+
+**옵션 c (마이그레이션)**:
+- 기존 CI 파일 보존 후 제거:
+  - `.gitlab-ci.yml` → `docs/legacy/.gitlab-ci.yml.${TIMESTAMP}.bak`
+  - 동일하게 Jenkinsfile, `.circleci/config.yml` 등
+- `git rm <기존 CI 파일>`
+- harness GH Actions 유지
+
+**기존 GitHub Actions(`.github/workflows/ci.yml`)가 이미 있는 경우 (옵션과 무관)**:
 - harness의 ci.yml과 diff해서 **누락된 step만** 추가 (coverage, audit
   upload, docker-build job 등)
 - 기존 trigger(main/develop) 유지
@@ -324,11 +397,12 @@ git commit -m "chore(harness): resolve husky conflict (option <A|B>)"
   1. 기존 job 이름을 `quality-gate`로 rename
   2. job 안의 모든 step은 그대로 유지 (기존 + 추가된 것)
   3. 이 rename으로 기존 branch protection의 required status checks가
-     깨짐 → 마지막 7단계에서 `setup-repo.sh` 재실행 필수 명시
+     깨짐 → 마지막 7단계에서 `setup-repo.sh` 재실행 필수
 
 ```
-git add .github/workflows/
-git commit -m "chore(harness): merge CI workflow"
+git add .github/workflows/ docs/legacy/    # 옵션 c면 docs/legacy/ 포함
+# 옵션 a면 .gitlab-ci.yml 등은 변경 없음, git rm으로 제거된 파일들만 스테이징
+git commit -m "chore(harness): merge CI workflow (<선택된 옵션>)"
 ```
 
 **3-7. Dependabot 병합** (`chore(harness): merge dependabot`)
@@ -374,29 +448,144 @@ lint / typecheck / test / build **4개 모두** 검증:
 Python/Go/Rust 프로젝트면 이 단계는 skip. 대신 validate.sh를 4단계에서
 언어별 명령으로 교체.
 
-## 4. 스택별 커스터마이징 (E 섹션 실행) (`chore(harness): customize for {stack}`)
+## 4. 스택별 커스터마이징 (E 섹션 실행)
 
-감지된 스택 정보 기반 자동 수정:
+이 단계는 3개의 독립 commit으로 나뉨: 4-1 스크립트 커스터마이징,
+4-2 테스트 러너 `--changed` 지원 검증, 4-3 Docker compose 검증/교정.
 
-- `scripts/validate.sh`, `validate-quick.sh`의 `npm run *` 명령을
-  감지된 패키지 매니저 + 언어에 맞게 교체:
-  - npm → npm run, pnpm → pnpm, yarn → yarn
-  - Python → `ruff check .`, `mypy .`, `pytest`, `<build-step>`
-  - Go → `go vet ./...`, `go test ./...`, `go build ./...`
-  - Rust → `cargo clippy`, `cargo test`, `cargo build`
+**4-1. 스크립트 + 규칙 문서 커스터마이징** (`chore(harness): customize for <언어+매니저+러너>`)
+
+**Monorepo 스코프 처리**: D에서 `monorepo: per-package`를 선택했으면:
+- `scripts/`는 루트에 유지 (공통)
+- 그러나 `scripts/validate.sh`의 실행 명령이 각 workspace에서 돌도록
+  수정 (예: pnpm workspace면 `pnpm -r run lint`, turborepo면 `turbo run
+  lint`)
+- 각 패키지 디렉토리에 `docs/agents/` 심볼릭 링크 또는 README 참조로
+  "이 규칙은 repo 루트의 docs/agents/를 따릅니다" 안내 생성 (요청한 경우만)
+
+`monorepo: root-only`를 선택했으면 루트만 처리.
+
+**기본 커스터마이징 (스코프와 무관)**:
+
+- `scripts/validate.sh`, `validate-quick.sh`의 `npm run *` 명령을 **3-3c의
+  매핑 테이블**과 동일한 규칙으로 감지된 언어/매니저에 맞게 교체.
+  (`validate-quick.sh`의 silent full-test fallback 제거 로직은 절대 건드리지
+  않음 — 기존 성능 개선 유지)
 - `.claude/hooks/run-checks.sh`의 case 문 확장자를 주 언어에 맞게 조정
-- `docs/agents/architecture-rules.md`에 "프로젝트 실제 구조" 섹션 추가
-  (기존 섹션은 유지, 새 섹션을 파일 끝에 append)
-- `docs/agents/coding-rules.md`에 감지된 로거 라이브러리 섹션 추가
-- `docs/agents/testing-rules.md`에 감지된 테스트 러너 + 현재 커버리지
-  수치(가능하면) 반영
-- `docs/agents/deploy-rules.md`에 감지된 배포 타겟(Dockerfile /
-  vercel.json / fly.toml / netlify.toml 등) 반영
+  (예: Python이면 `*.py` 추가, Go이면 `*.go`)
+- `docs/agents/architecture-rules.md`에 "## 프로젝트 실제 구조" 섹션 추가
+  (기존 섹션 유지, 파일 끝에 append. Monorepo면 workspace 트리 포함)
+- `docs/agents/coding-rules.md`에 "## 감지된 로거" 섹션 추가
+- `docs/agents/testing-rules.md`에 "## 감지된 테스트 환경" 섹션 추가
+  (러너 + 커버리지 기준이 있으면 포함)
+- `docs/agents/deploy-rules.md`에 "## 감지된 배포 타겟" 섹션 추가
+  (Dockerfile / vercel.json / fly.toml / netlify.toml / Procfile 등)
 
 ```
-git add scripts/ .claude/hooks/ docs/agents/
+git add scripts/validate.sh scripts/validate-quick.sh .claude/hooks/run-checks.sh docs/agents/architecture-rules.md docs/agents/coding-rules.md docs/agents/testing-rules.md docs/agents/deploy-rules.md
 git commit -m "chore(harness): customize for <언어+매니저+러너>"
 ```
+
+**4-2. 테스트 러너 `--changed` 지원 검증** (`chore(harness): verify test runner performance`)
+
+Story 단위 `validate-quick`이 빠르려면 테스트 러너가 "변경 파일만 테스트"
+기능을 지원해야 합니다. 감지된 러너 기준으로 체크:
+
+| 러너 | 지원 플래그 | 상태 |
+|---|---|---|
+| vitest | `--changed <ref>` | ✅ 완전 지원 |
+| jest | `--changedSince=<ref>` | ✅ 완전 지원 |
+| pytest | `--lf` / `--ff` / pytest-testmon | ⚠️ 부분 지원 (플러그인 필요) |
+| mocha | 없음 | ❌ 미지원 |
+| go test | 파일 레벨 지원 (`go test ./pkg/...`) | ⚠️ 디렉토리 기반 |
+| cargo test | 없음 | ❌ 미지원 |
+
+**미지원(❌) 또는 부분(⚠️)이면 사용자에게 경고 출력**:
+
+```
+⚠ 감지된 테스트 러너 <이름>은 --changed 기능을 지원하지 않습니다.
+  validate-quick이 story 단위로 전체 테스트를 돌리게 됩니다.
+  story당 5~10분+ 소요 가능 (과거 해결된 문제의 재발).
+
+  권장 조치:
+  1. vitest/jest로 전환 (JS/TS 프로젝트)
+  2. pytest-testmon 같은 플러그인 도입
+  3. validate-quick.sh가 test 단계를 skip하도록 수정
+     (typecheck + lint만 돌리고 test는 validate.sh에만)
+```
+
+사용자 응답에 따라:
+- "전환"/"플러그인 도입" → 사용자가 수동 진행. 프롬프트는 여기까지.
+- "test skip" → `validate-quick.sh`에서 테스트 단계를 주석 처리하고 이유 기록.
+
+```
+git add scripts/validate-quick.sh   # test skip 선택한 경우만
+git commit -m "chore(harness): verify test runner performance"
+```
+
+**4-3. Docker compose 검증/교정** (`chore(harness): audit docker-compose files`)
+
+기존 `docker-compose*.yml`이 있으면 `docs/agents/docker-rules.md`와
+`deploy-rules.md` 기준으로 검사:
+
+검사 항목:
+1. `name:` 필드 존재 여부 + 환경 접미사 (`-dev` / `-staging`)
+2. `x-environment:` 라벨 존재 (값: `production`/`development`/`staging`)
+3. 컨테이너명이 `<접두사>-<역할>` 패턴 준수, 금지 패턴(`-1`, `-new`,
+   `_backend` 등) 부재
+4. 볼륨 `external: true` + `name:` 명시 (DB 볼륨인 경우)
+5. Backend/DB/Redis의 호스트 포트 바인딩이 주석 처리됐는지 (운영)
+6. `restart: unless-stopped` 또는 `restart: always` 명시
+
+위반 감지 시:
+```
+⚠ docker-compose 위반 감지:
+  - docker-compose.yml: name 필드 없음, x-environment 라벨 없음
+  - 컨테이너 'web-backend-1': 숫자 suffix 금지 패턴 (docker-rules §1-3 위배)
+  - DB 볼륨 'postgres_data': external 선언 없음 (재생성 시 데이터 유실 위험)
+
+  수정할까요? (각 항목 수락/거부 가능)
+```
+
+**위험도별 수정 분류** — 사용자에게 각 그룹별로 승인 받기:
+
+**🟢 안전 수정 (즉시 적용 가능, 실행 중 container 영향 없음)**:
+- `name:` 필드 없으면 추가 (예: `name: <디렉토리명>`, 운영이면 접미사
+  없음, 개발이면 `-dev`)
+- `x-environment:` 라벨 추가
+- `restart:` 정책 추가
+
+**🟡 중간 위험 (재배포 시 container 재생성 필요)**:
+- 볼륨 `external: true` + `name:` 명시 추가 — **기존 볼륨이 있으면 이
+  조치 전에 `docker volume create --name <기존-이름>`로 external 볼륨으로
+  전환 필요**. AI는 기존 볼륨 이름 확인 + 전환 명령을 사용자에게 제시만
+  하고 실행은 사용자 승인 후 진행.
+- Backend/DB/Redis 호스트 포트 바인딩 주석 처리 — 로컬 접근 도구(DBeaver
+  등)가 끊김. 사용자에게 확인.
+
+**🔴 고위험 (데이터 유실 또는 서비스 중단 가능)**:
+- **컨테이너 이름 rename은 자동 수행 금지**. 기존 실행 중 container를
+  참조하는 외부 시스템(monitoring, scripts)을 깨뜨림. 대안:
+  ```
+  ⚠ 컨테이너명 'web-backend-1'이 금지 패턴 위반.
+    자동 rename은 데이터 유실 위험이 있어 수행하지 않습니다.
+    권장 절차 (수동):
+    1. 현재 container 중지: docker compose stop
+    2. compose 파일에서 container_name을 'web-backend'로 수정
+    3. 외부 참조(monitoring, nginx proxy) 업데이트
+    4. docker compose up -d
+    5. 데이터 확인 후 기존 container 제거: docker rm web-backend-1
+  ```
+
+사용자 승인 받은 항목만 수정. 원본은 `docs/legacy/docker-compose.yml.${TIMESTAMP}.bak`
+백업.
+
+```
+git add docker-compose*.yml docs/legacy/
+git commit -m "chore(harness): audit docker-compose files (safe-only)"
+```
+
+(docker-compose 파일이 없으면 4-3 단계 skip)
 
 ## 5. 검증 (`chore(harness): verify integration`)
 
@@ -463,13 +652,17 @@ git push
 - CLAUDE.md / AGENTS.md / README.md 병합·교체: <N>개 섹션
 - docs/legacy/ 에 백업된 원본: <파일 목록>
 - CI workflow / dependabot / .claude hooks: 병합
-- 스택별 커스터마이징: <요약>
+- 스택별 커스터마이징 (4-1): <요약>
+- 테스트 러너 --changed 검증 (4-2): <지원 / 미지원 → 조치>
+- docker-compose 검증 (4-3): <위반 N개 수정 / 파일 없음>
 - 총 commit: <N>개
 
 ### 검증
 - validate.sh: <통과 / 실패 원인>
-- git hooks 활성화: <yes/no(옵션 B)>
+- git hooks 활성화: <yes / no(옵션 B)>
 - GitHub 보안 설정: <적용 / skip 사유>
+- 성능 위험 (4-2에서 경고 발생한 경우): <현재 러너 미지원 → story 단위
+  속도 저하 가능성 알림>
 
 ### 다음 단계
 - 팀에 "harness 도입됨" 공지 (커밋 범위: <A..B>)
@@ -491,14 +684,18 @@ git push
 | A. 신규 설치 | (프롬프트 외) install.sh | 이미 처리됨 |
 | B. 누락 append | 3-1 / 3-2 / 3-6(누락 step) / 3-7 / 3-8 / 3-9 / 3-3·3-4·3-4b 일부 | |
 | C. 모순 교체 | 3-3 / 3-4 / 3-4b (백업 후 치환) | docs/legacy/ 저장 |
-| D. 사용자 선택 | 3-5(husky) / 3-6(CI rename) / 7(기존 CI 처리) / 4(monorepo 스코프) | 2단계 답변에 포함 |
-| E. 커스터마이징 | 4단계 | 스택 감지 기반 |
+| D. 사용자 선택 | 3-5(husky) / 3-6(CI rename) / 7(기존 CI 처리) / 4-1(monorepo 스코프) | 2단계 답변에 포함 |
+| E. 커스터마이징 | 4-1 (스크립트·규칙 문서) / 4-2 (테스트 러너 검증) / 4-3 (docker-compose 검증) | 스택 감지 기반 |
 
 ## 강제 규칙 (절대 위반 금지)
 
-- **사전 조건(0단계) 실패 시 즉시 중단**. install.sh 미실행/uncommitted
-  상태에서 진행 금지.
+- **사전 조건(0단계) 실패 시 즉시 중단**. install.sh 설치 결과물 미존재
+  또는 uncommitted 상태에서 진행 금지.
+- **멱등성 보장**: 이미 병합된 내용은 다시 append하지 않음. 이미 교체된
+  섹션은 다시 교체하지 않음. dedup은 실제 내용(라인·섹션 헤더·JSON key)
+  기준. 재실행 시 0단계 7번 멱등성 체크 통과해야 진행.
 - **세션 TIMESTAMP 1회 고정**: 모든 백업 파일이 동일 timestamp 공유.
+  재실행 시에는 새 TIMESTAMP가 생성되어 이전 백업과 충돌하지 않음.
 - **bash 문법 전용**: PowerShell cmdlet 호출 금지. 모든 명령은 bash.
 - **프로젝트 루트에서 실행**: 매 단계 시작 시 `cd "$(git rev-parse
   --show-toplevel)"`로 확인.
@@ -511,10 +708,16 @@ git push
 - **독립 commit**: 각 단계를 독립 commit으로. 정확한 파일만 `git add`
   (다른 변경 섞이면 불가).
 - **최대 3회 시도**: 5단계 validate 실패 시 최대 3회. 이후 중단 + 보고.
+  4-2 테스트 러너 검증에서 경고가 나오더라도 사용자가 수용하면 이 제한은
+  적용 안 됨 (경고는 기록만).
 - **실패 시 중단**: 어느 단계든 실패하면 stop하고 사용자에게 보고.
   그때까지의 commit은 rollback 가능한 상태로 남아있음.
-- **승인 게이트 1회**: 2단계 일괄 승인 + D 답변. 그 외 각 모순 항목별
-  개별 승인 받지 않음.
+- **승인 게이트 1회 + 필요 시 확인**: 2단계 일괄 승인 + D 답변은 필수.
+  4-2(테스트 러너 경고)와 4-3(docker-compose 위반)은 위반 발견 시에만
+  짧은 확인 요청 (수락/거부).
+- **성능 보존**: `validate-quick.sh`의 silent full-test fallback 제거
+  로직 및 PostToolUse hook의 "변경 파일만 eslint" 로직은 절대 건드리지
+  않음. 과거 해결된 "story당 2~3시간" 문제의 재발 방지.
 ````
 
 ---
