@@ -32,10 +32,17 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Greenfield 기본값: 배포 서버·secrets가 확정되기 전까지 실행 금지.
+    # 활성화 방법 (README.md 8단계 참조):
+    #   1. DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY / DEPLOY_APP_DIR 4개 secret 설정
+    #   2. GitHub Settings → Environments → 'production' 생성
+    #   3. gh variable set HARNESS_DEPLOY_ENABLED --body "true"
+    # 위 3가지가 모두 완료되기 전에는 workflow가 트리거되어도 이 job이 skip됨.
     if: |
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.event == 'push'
+      github.event.workflow_run.event == 'push' &&
+      vars.HARNESS_DEPLOY_ENABLED == 'true'
     environment: production
     steps:
       - uses: actions/checkout@v4
