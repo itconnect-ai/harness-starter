@@ -145,9 +145,19 @@ function Invoke-HarnessGitPush {
   $credential = Get-HarnessCredentialStoreUrl -RemoteUrl $remote
   if ($null -eq $credential) { return $result }
 
-  $output = & git -c http.sslBackend=openssl -c credential.helper= -c credential.https://github.com.helper= push -u $credential.Url "HEAD:refs/heads/$Branch" 2>&1
+  $output = & git -c http.sslBackend=openssl -c credential.helper= -c credential.https://github.com.helper= push $credential.Url "HEAD:refs/heads/$Branch" 2>&1
+  $exitCode = $LASTEXITCODE
+  if ($exitCode -eq 0) {
+    $fetchOutput = & git -c http.sslBackend=openssl -c credential.helper= -c credential.https://github.com.helper= fetch $credential.Url "$Branch`:refs/remotes/origin/$Branch" 2>&1
+    $output += $fetchOutput
+    if ($LASTEXITCODE -eq 0) {
+      $upstreamOutput = & git branch --set-upstream-to="origin/$Branch" $Branch 2>&1
+      $output += $upstreamOutput
+    }
+  }
+
   return [pscustomobject]@{
-    ExitCode = $LASTEXITCODE
+    ExitCode = $exitCode
     Output = (Redact-HarnessOutput -Output $output -Secret $credential.Secret)
   }
 }
