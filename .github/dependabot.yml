@@ -1,0 +1,70 @@
+# .github/dependabot.yml
+#
+# Dependabot 설정 — 의존성 업데이트 자동 PR.
+# auto-merge 정책은 .github/workflows/dependabot-auto-merge.yml 참조.
+#
+# 참고: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # ── npm/yarn/pnpm 의존성 ──
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    # groupings: 관련 의존성을 하나의 PR로 묶음 (소음 감소)
+    groups:
+      types:
+        patterns:
+          - "@types/*"
+      dev-tools:
+        patterns:
+          - "eslint*"
+          - "prettier"
+          - "typescript"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── GitHub Actions 버전 ──
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(deps-ci)"
+      include: "scope"
+
+  # ── Docker 이미지 ──
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(deps-docker)"
+      include: "scope"
