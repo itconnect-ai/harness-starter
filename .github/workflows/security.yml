@@ -69,3 +69,78 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
+
+  trivy-deps:
+    name: trivy-deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan (dependencies)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-deps.sarif'
+
+      - name: Upload Trivy deps SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-deps.sarif'
+          category: trivy-deps
+
+  trivy-image:
+    name: trivy-image
+    runs-on: ubuntu-latest
+    needs: [trivy-deps]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Dockerfile
+        id: check
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No Dockerfile — skipping image scan"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.found == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (scan target)
+        if: steps.check.outputs.found == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: scan-target:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy image scan
+        if: steps.check.outputs.found == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'scan-target:${{ github.sha }}'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-image.sarif'
+
+      - name: Upload Trivy image SARIF
+        if: always() && steps.check.outputs.found == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-image.sarif'
+          category: trivy-image
