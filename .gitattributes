@@ -17,6 +17,7 @@
 # ── 실행 스크립트: 항상 LF (bash/sh는 CRLF에서 \r 오류 발생) ──
 *.sh text eol=lf
 *.bash text eol=lf
+*.ps1 text eol=lf
 
 # ── Git hooks (확장자 없음): 항상 LF 강제 ──
 .githooks/* text eol=lf

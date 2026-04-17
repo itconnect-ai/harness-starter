@@ -20,12 +20,15 @@
 4. `docs/agents/` 아래 관련 규칙 참고
    - **필수**: `docs/agents/feedback-rules.md` (과거 반복 실수 패턴) 반드시 읽기
 5. 대상 Epic의 story를 순서대로 처리:
+   - Windows/Codex에서는 먼저 `./scripts/doctor.ps1`와 `./scripts/phase-a/preflight.ps1 -Epic <N>` 실행
    - `bmad-create-story` 스킬로 story 파일 생성
    - `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
    - 현재 OS/셸에 맞는 검증 진입점 실행
      - bash/WSL/macOS/Linux: `./scripts/validate-quick.sh`
      - Windows PowerShell: `./scripts/validate-quick.ps1`
-   - 통과 시 **commit + push 필수**: `git add -A && git commit -m "feat(story-name): 설명" && git push`
+   - 통과 시 **commit + push 필수**
+     - Windows PowerShell/Codex: `./scripts/phase-a/finalize-story.ps1 -StoryName <story-name>`
+     - bash/WSL/macOS/Linux: `git add -A && git commit -m "feat(story-name): 설명" && git push`
    - validate-quick 실패 시 수정 후 재검증, 3회 실패 시 skip
 6. Epic의 모든 story 완료 후 현재 OS/셸에 맞는 전체 검증 실행
    - bash/WSL/macOS/Linux: `./scripts/validate.sh`
@@ -94,6 +97,7 @@ Docker 컨테이너 또는 DB 마이그레이션 작업 시작 전 **반드시**
 - 소스 제어와 PR은 `git`, `gh`, 검증과 반복 작업은 저장소 `scripts/*`, JavaScript/TypeScript 패키지와 테스트 실행은 `npm`, `npx`, `node`, Python 작업은 `python`, `pip`, `uv`, HTTP 확인은 `curl` 또는 `http`, 브라우저/E2E는 `npx playwright`, 컨테이너 작업은 `docker`, `docker compose`, Kubernetes 작업은 `kubectl`, `helm`을 우선 사용
 - 동일 작업을 내장 도구와 CLI 둘 다로 수행할 수 있으면 CLI를 선택
 - 프로젝트에 공식 래퍼 스크립트나 표준 명령이 있으면 ad-hoc 명령보다 그것을 우선 사용
+- Windows/Codex에서는 `scripts/lib/git-utils.ps1` 기반 wrapper를 raw `git fetch/push`보다 우선 사용
 - CLI가 설치되어 있지 않거나 인증, 권한, 플랫폼 제약으로 실행할 수 없을 때만 대체 도구를 사용
 
 ## Validation (완료 기준)

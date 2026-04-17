@@ -174,7 +174,7 @@ SECURITY_WARNINGS=0
   fi
 
   # docker-compose down -v 패턴
-  if safe_grep_rn "down -v\|down --volumes" scripts/ ; then
+  if safe_grep_rn "down -v\|down --volumes" scripts/ | grep -vE "scripts/validate\.(sh|ps1):" ; then
     echo "WARNING: 'docker-compose down -v' found in scripts (destroys DB data)"
     SECURITY_WARNINGS=$((SECURITY_WARNINGS+1))
   fi

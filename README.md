@@ -510,6 +510,12 @@ gh variable list | grep HARNESS_DEPLOY_ENABLED
 
 Codex Desktop을 열고 아래 프롬프트를 입력합니다.
 
+> Windows/Codex 안정성: Windows PowerShell 진입점(`*.ps1`)은 native
+> PowerShell 경로입니다. Git Bash/WSL은 선택 호환 계층이며 검증 필수
+> 의존성이 아닙니다. Epic 시작 전에 `./scripts/doctor.ps1`와
+> `./scripts/phase-a/preflight.ps1 -Epic <N>`를 실행하면 Windows env,
+> Git, Node child-process 문제를 조기에 확인할 수 있습니다.
+
 ```
 Epic 1의 story를 순서대로 처리해.
 
@@ -552,7 +558,10 @@ Epic 1의 story를 순서대로 처리해.
    - 실패 시 로그 확인: state/validate/latest/*.log
 4. 통과 시 story 브랜치 생성 + commit + push:
    ```
-   # 첫 story면 브랜치 생성
+   # Windows PowerShell/Codex 권장
+   ./scripts/phase-a/finalize-story.ps1 -StoryName <story-이름>
+
+   # bash/WSL/macOS/Linux 또는 수동 경로
    git checkout -b story/<story-이름>   # 없으면 생성, 있으면 -b 생략
    git add -A
    git commit -m "feat(<story-이름>): implement story"
@@ -595,6 +604,8 @@ Epic 1의 story를 순서대로 처리해.
 
 > **운영체제 감지 원칙**: 프롬프트에도 "현재 OS/셸을 먼저 확인하고 그에 맞는 검증 진입점을 선택하라"를 넣을 수 있습니다.
 > 다만 실제 자동화 안정성은 프롬프트보다 스크립트 진입점(`.sh`/`.ps1`)에 반영하는 쪽이 더 높습니다.
+> Windows PowerShell entrypoint는 Git Bash를 내부적으로 필수 호출하지 않아야 하며,
+> 이 규칙은 `.github/workflows/harness-self-test.yml`에서 검증합니다.
 
 ### Loop B: 리뷰 + 수정 (Claude Code)
 
@@ -854,10 +865,13 @@ AI에게 Docker 또는 DB 마이그레이션 작업을 시키실 때는 **환경
 │
 ├── scripts/
 │   ├── install.sh                     다른 프로젝트로 필수 파일만 install (tarball 기반)
-│   ├── install.ps1                    Windows PowerShell용 래퍼 (Git Bash 자동 호출)
+│   ├── install.ps1                    Windows PowerShell용 설치 진입점
 │   ├── lib/
 │   │   ├── validate-utils.sh          검증 공용 헬퍼 (래퍼, 로그, summary/verbose)
-│   │   └── powershell-utils.ps1       PowerShell용 Git Bash 호출 (WSL opt-in)
+│   │   ├── validate-utils.ps1         PowerShell native 검증 공용 헬퍼
+│   │   ├── package-runner.ps1         npm/pnpm/yarn/bun 감지 + script 실행 헬퍼
+│   │   ├── git-utils.ps1              Codex/Windows-safe git wrapper
+│   │   └── powershell-utils.ps1       legacy Bash 호환 호출 헬퍼
 │   ├── setup/
 │   │   ├── init-harness.sh            하네스 자동 초기화 통합 (4단계 프롬프트에서 호출)
 │   │   ├── init-harness.ps1           Windows 버전
@@ -870,6 +884,8 @@ AI에게 Docker 또는 DB 마이그레이션 작업을 시키실 때는 **환경
 │   ├── validate-quick.ps1             Windows PowerShell Story 빠른 검증
 │   ├── validate.sh                    bash/WSL/macOS/Linux Epic 전체 검증
 │   ├── validate.ps1                   Windows PowerShell Epic 전체 검증
+│   ├── doctor.ps1                     Windows/Codex 런타임 진단
+│   ├── phase-a/                       Codex Phase A preflight/finalize wrapper
 │   ├── smoke.sh                       bash/WSL/macOS/Linux 스모크 테스트
 │   ├── smoke.ps1                      Windows PowerShell 스모크 테스트
 │   ├── cleanup-branches.sh            로컬+원격 merged 브랜치 정리 (archive tag로 복구 보존, Phase C에서 호출)

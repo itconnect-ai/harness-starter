@@ -1,0 +1,65 @@
+name: Harness Self-Test
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: harness-self-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shell-entrypoints:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bash syntax
+        run: |
+          find scripts -name "*.sh" -print0 | xargs -0 -I{} bash -n "{}"
+
+      - name: Template validate
+        run: ./scripts/validate.sh
+
+      - name: Template quick validate
+        run: ./scripts/validate-quick.sh
+
+  powershell-entrypoints:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PowerShell syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem scripts -Recurse -Filter *.ps1 | ForEach-Object {
+            $null = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_ }
+              exit 1
+            }
+          }
+
+      - name: Core PowerShell entrypoints must be native
+        shell: pwsh
+        run: |
+          $entrypoints = @("scripts/validate.ps1", "scripts/validate-quick.ps1", "scripts/smoke.ps1")
+          $matches = Select-String -Path $entrypoints -Pattern "Invoke-HarnessBashScript" -SimpleMatch
+          if ($matches) {
+            $matches | ForEach-Object { Write-Error "$($_.Path):$($_.LineNumber) still shells out to Bash" }
+            exit 1
+          }
+
+      - name: Doctor
+        shell: pwsh
+        run: ./scripts/doctor.ps1
+
+      - name: Template validate
+        shell: pwsh
+        run: ./scripts/validate.ps1
+
+      - name: Template quick validate
+        shell: pwsh
+        run: ./scripts/validate-quick.ps1

@@ -1,0 +1,14 @@
+incident_id: "2026-04-17-codex-windows-sandbox"
+phase: "A"
+epic: "epic-0"
+story: "harness-windows-runtime"
+category: "other"
+symptom: "Codex Desktop on Windows failed on Git Bash-backed PowerShell entrypoints, Git TLS/credential access, and Node child-process execution paths that worked in Claude Code."
+root_cause: "Windows .ps1 entrypoints were Bash wrappers, while Codex Windows sandbox may lack normal Windows process environment variables and can block shell hooks or child-process-heavy tooling."
+preventable_by: "validate"
+evidence:
+  - "scripts/validate.ps1"
+  - "scripts/validate-quick.ps1"
+  - "scripts/lib/powershell-utils.ps1"
+mechanically_detectable: true
+regression_test: ".github/workflows/harness-self-test.yml"

@@ -11,8 +11,23 @@
 
 ## Active Rules
 
-아직 회고가 실행되지 않았습니다.
-Phase C 회고 후 이 섹션이 자동으로 채워집니다.
+### 1. Windows PowerShell entrypoint must be native (codex-windows-native-pwsh)
+- source: 2026-04-17-codex-windows-sandbox
+- 발견: Codex Desktop Windows에서 `.ps1`가 Git Bash 래퍼로 동작하면서 validate/git/node 단계가 연쇄 실패
+- 규칙: Windows용 `validate.ps1`, `validate-quick.ps1`, `smoke.ps1`는 Bash를 숨겨 호출하지 말고 native PowerShell로 구현한다. Git Bash/WSL은 선택 호환 계층이지 필수 실행 경로가 아니다.
+- 승격 상태: `.github/workflows/harness-self-test.yml`에서 핵심 `.ps1` entrypoint의 `Invoke-HarnessBashScript` 의존을 차단
+
+### 2. Codex Windows git must use harness wrapper first (codex-windows-git-wrapper)
+- source: 2026-04-17-codex-windows-sandbox
+- 발견: Codex Desktop Windows에서 `git fetch/push`가 schannel, credential helper, 기본 Windows env 누락으로 실패
+- 규칙: Phase A 자동화와 문서화된 workflow는 raw `git fetch/push`보다 `scripts/lib/git-utils.ps1` 기반 wrapper를 우선 사용한다. wrapper는 Windows 기본 env 복구, OpenSSL fallback, credential-store fallback, secret redaction을 제공해야 한다.
+- 승격 상태: active
+
+### 3. Hook fallback requires native validation first (codex-windows-hook-fallback)
+- source: 2026-04-17-codex-windows-sandbox
+- 발견: Bash 기반 git hook은 Codex Windows sandbox에서 실행되지 않을 수 있음
+- 규칙: Windows/Codex에서 `git commit --no-verify` fallback은 native validate/check가 이미 통과한 경우에만 허용한다. hook 실패를 검증 생략으로 해석하지 않는다.
+- 승격 상태: active
 
 <!-- 예시 형식:
 ### 1. 테스트 누락 (missing-tests)

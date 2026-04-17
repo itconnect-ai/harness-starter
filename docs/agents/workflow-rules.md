@@ -13,11 +13,20 @@
 
 ## Phase A: Codex Desktop 흐름 (Epic 단위)
 
+Epic 시작 전:
+1. Windows PowerShell이면 `./scripts/doctor.ps1`로 Codex/Windows 런타임을 점검한다.
+2. 현재 OS/셸에 맞는 preflight를 실행한다.
+   - Windows PowerShell: `./scripts/phase-a/preflight.ps1 -Epic <N>`
+   - bash/WSL/macOS/Linux: README의 Loop A 사전 조건 또는 `scripts/phase-a/preflight.sh`가 있는 경우 해당 스크립트
+
 각 story마다 순서대로:
 1. `bmad-create-story` 스킬로 story 파일 생성 (풀 컨텍스트 엔진)
 2. `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
-3. `./scripts/validate-quick.sh` 실행 (lint + typecheck + 변경 관련 테스트만)
-4. 통과 시 **commit + push 필수**: `git add -A && git commit -m "feat(story-이름): 설명" && git push`
+3. 현재 OS/셸에 맞는 quick validate 실행 (lint + typecheck + 변경 관련 테스트만)
+   - Windows PowerShell: `./scripts/validate-quick.ps1`
+   - bash/WSL/macOS/Linux: `./scripts/validate-quick.sh`
+4. 통과 시 **commit + push 필수**. Windows PowerShell/Codex에서는 raw git 대신:
+   `./scripts/phase-a/finalize-story.ps1 -StoryName <story-이름>`
 5. sprint-status.yaml 업데이트 (스킬이 자동 처리)
 6. 실패 시 수정 후 재검증, 3회 실패 시 skip
 7. 다음 story로 진행
@@ -25,13 +34,17 @@
 **중요:** validate-quick 통과한 story는 반드시 commit과 push를 완료해야 다음 story로 진행할 수 있다. push 없이 다음 story 진행은 금지.
 
 Epic의 모든 story 완료 후:
-1. `./scripts/validate.sh` 전체 실행 (순차 테스트로 병렬 충돌 방지)
-2. 실패 시 수정 후 `./scripts/validate.sh --from=실패단계`로 재개
+1. 현재 OS/셸에 맞는 전체 validate 실행
+   - Windows PowerShell: `./scripts/validate.ps1`
+   - bash/WSL/macOS/Linux: `./scripts/validate.sh`
+2. 실패 시 수정 후 현재 OS/셸에 맞는 `--from=실패단계`로 재개
 3. 전체 통과 후 Phase B로 이동
 
 **--from 옵션:** 테스트에서 실패했으면 `--from=test`, 빌드에서 실패했으면 `--from=build`로 해당 단계부터 재실행. 처음부터 다시 돌리지 않음.
 
-**검증 출력:** 기본 summary 모드로 단계별 성공/실패만 표시. 실패 시 `state/validate/latest/*.log`에서 해당 단계 로그를 확인. 전체 출력이 필요하면 `VALIDATE_OUTPUT_MODE=verbose`를 설정.
+**검증 출력:** 기본 summary 모드로 단계별 성공/실패만 표시. 실패 시 `state/validate/latest/*.log`에서 해당 단계 로그를 확인. 전체 출력이 필요하면 bash는 `VALIDATE_OUTPUT_MODE=verbose`, PowerShell은 `$env:VALIDATE_OUTPUT_MODE='verbose'`를 설정.
+
+**Windows/Codex 원칙:** `.ps1` entrypoint는 native PowerShell 경로다. Git Bash 또는 WSL을 내부 필수 의존성으로 삼지 않는다. Bash 기반 hook이 실패하면 native validate/check 통과 후에만 no-verify fallback을 사용한다.
 
 Codex Desktop 모델 설정:
 - 모델: chatgpt-5.4
@@ -44,7 +57,7 @@ Epic 전체를 대상으로:
 2. 각 story 브랜치의 코드를 `bmad-code-review` 스킬로 리뷰
 3. REJECTED 항목 직접 수정 (Edit/Write, Hooks 자동 작동)
 4. 누락 테스트 보강
-5. `./scripts/validate.sh` + `./scripts/smoke.sh` 최종 검증 (이미 Epic 단위 validate를 통과했으므로 재확인 성격)
+5. 현재 OS/셸에 맞는 `validate` + `smoke` 최종 검증 (이미 Epic 단위 validate를 통과했으므로 재확인 성격)
 6. 모든 story APPROVED 후 **develop** 브랜치에 merge
 7. develop 푸시 시 GitHub CI 작동, 통과하면 develop → main으로 승격 (main push 시 자동 배포)
 8. sprint-status.yaml 업데이트 (review → done)
@@ -64,7 +77,9 @@ Phase B 완료 후 실행:
    - 3회+ 또는 치명적 (기계적으로 판별 가능한 경우만): `scripts/validate.sh`에 **blocking check**로 추가 (warning이 아닌 exit 1)
    - 아키텍처 성격: `docs/agents/architecture-rules.md` 또는 `docs/decisions/`에 ADR
 8. **`.claude/hooks/`는 Claude Phase B에만 적용됨** — 공통 강제는 `scripts/validate.sh` 또는 CI 우선
-9. **완료 기준**: harness 파일(validate.sh, rules, hooks)을 수정했으면 반드시 `bash -n scripts/validate.sh && ./scripts/validate.sh` 재실행하여 harness 자체가 깨지지 않았는지 확인
+9. **완료 기준**: harness 파일(validate, rules, hooks)을 수정했으면 반드시 현재 OS/셸에 맞는 검증을 재실행하여 harness 자체가 깨지지 않았는지 확인
+   - Windows PowerShell: `./scripts/validate.ps1`
+   - bash/WSL/macOS/Linux: `bash -n scripts/validate.sh && ./scripts/validate.sh`
 10. 검증 통과 후 커밋: `chore(harness): Epic N 회고 반영`
 11. **브랜치 정리**: 이번 Epic의 story 브랜치와 merged된 임시 브랜치를 정리
     ```bash
