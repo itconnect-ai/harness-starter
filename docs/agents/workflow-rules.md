@@ -46,6 +46,8 @@ Epic의 모든 story 완료 후:
 
 **Windows/Codex 원칙:** `.ps1` entrypoint는 native PowerShell 경로다. Git Bash 또는 WSL을 내부 필수 의존성으로 삼지 않는다. Bash 기반 hook이 실패하면 native validate/check 통과 후에만 no-verify fallback을 사용한다.
 
+**Windows/Codex JS 런타임 판정:** raw `node`, `npm`, `npx`, `bun` sanity check 실패만으로 Phase A를 중단하지 않는다. Codex Windows 프로세스는 기본 Windows env가 비어 있을 수 있고, harness entrypoint가 이를 복구한다. 작업 가능 여부는 `./scripts/validate-quick.ps1` 또는 `./scripts/validate.ps1` 실패로만 판정한다. `doctor.ps1`의 `node child_process` 경고는 worker/fork-heavy 도구 주의 신호이지 단독 중단 사유가 아니다.
+
 Codex Desktop 모델 설정:
 - 모델: chatgpt-5.4
 - 사고수준: xhigh (`-c model_reasoning_effort=xhigh`)

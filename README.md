@@ -515,6 +515,9 @@ Codex Desktop을 열고 아래 프롬프트를 입력합니다.
 > 의존성이 아닙니다. Epic 시작 전에 `./scripts/doctor.ps1`와
 > `./scripts/phase-a/preflight.ps1 -Epic <N>`를 실행하면 Windows env,
 > Git, Node child-process 문제를 조기에 확인할 수 있습니다.
+> 단, raw `node`, `npm`, `npx`, `bun` 실행 실패만으로 Phase A를 중단하지
+> 마세요. 작업 가능 여부는 `./scripts/validate-quick.ps1` 또는
+> `./scripts/validate.ps1` 실패로만 판단합니다.
 
 ```
 Epic 1의 story를 순서대로 처리해.
@@ -606,6 +609,9 @@ Epic 1의 story를 순서대로 처리해.
 > 다만 실제 자동화 안정성은 프롬프트보다 스크립트 진입점(`.sh`/`.ps1`)에 반영하는 쪽이 더 높습니다.
 > Windows PowerShell entrypoint는 Git Bash를 내부적으로 필수 호출하지 않아야 하며,
 > 이 규칙은 `.github/workflows/harness-self-test.yml`에서 검증합니다.
+> Windows/Codex의 raw JS runtime sanity check는 오탐이 될 수 있습니다.
+> 하네스 entrypoint가 Windows env를 복구하므로 `validate-quick.ps1` 결과를
+> 기준으로 판단하세요.
 
 ### Loop B: 리뷰 + 수정 (Claude Code)
 

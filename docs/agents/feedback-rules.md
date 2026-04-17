@@ -29,6 +29,12 @@
 - 규칙: Windows/Codex에서 `git commit --no-verify` fallback은 native validate/check가 이미 통과한 경우에만 허용한다. hook 실패를 검증 생략으로 해석하지 않는다.
 - 승격 상태: active
 
+### 4. Raw JS runtime checks are not validation gates (codex-windows-raw-node-false-negative)
+- source: 2026-04-17-codex-windows-sandbox
+- 발견: raw `node -e`, `npm`, `npx`, `bun` 실행이 Codex Windows 기본 env 누락으로 실패했으나 `validate-quick.ps1`는 env 복구 후 통과
+- 규칙: Windows/Codex에서 raw JS 런타임 sanity check 실패만으로 story 구현을 중단하지 않는다. 반드시 현재 OS/셸에 맞는 하네스 검증 entrypoint 결과로 판정한다.
+- 승격 상태: active
+
 <!-- 예시 형식:
 ### 1. 테스트 누락 (missing-tests)
 - source: epic-1-story-3

@@ -21,6 +21,7 @@
    - **필수**: `docs/agents/feedback-rules.md` (과거 반복 실수 패턴) 반드시 읽기
 5. 대상 Epic의 story를 순서대로 처리:
    - Windows/Codex에서는 먼저 `./scripts/doctor.ps1`와 `./scripts/phase-a/preflight.ps1 -Epic <N>` 실행
+   - Windows/Codex에서 raw `node`, `npm`, `npx`, `bun` 실행 실패만으로 중단 금지. 중단 기준은 현재 OS/셸에 맞는 `validate-quick` 실패임
    - `bmad-create-story` 스킬로 story 파일 생성
    - `bmad-dev-story` 스킬로 구현 (TDD: red-green-refactor)
    - 현재 OS/셸에 맞는 검증 진입점 실행
@@ -98,6 +99,7 @@ Docker 컨테이너 또는 DB 마이그레이션 작업 시작 전 **반드시**
 - 동일 작업을 내장 도구와 CLI 둘 다로 수행할 수 있으면 CLI를 선택
 - 프로젝트에 공식 래퍼 스크립트나 표준 명령이 있으면 ad-hoc 명령보다 그것을 우선 사용
 - Windows/Codex에서는 `scripts/lib/git-utils.ps1` 기반 wrapper를 raw `git fetch/push`보다 우선 사용
+- Windows/Codex에서는 raw JS 런타임 sanity check보다 `./scripts/validate-quick.ps1`와 `./scripts/validate.ps1` 결과를 신뢰
 - CLI가 설치되어 있지 않거나 인증, 권한, 플랫폼 제약으로 실행할 수 없을 때만 대체 도구를 사용
 
 ## Validation (완료 기준)

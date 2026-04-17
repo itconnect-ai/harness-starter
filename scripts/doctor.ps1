@@ -37,6 +37,10 @@ function Format-SafeUrl {
 Write-Host "======================================"
 Write-Host " Harness Doctor (Windows/Codex)"
 Write-Host "======================================"
+Write-Host "Note: doctor warnings are diagnostics. Phase A is blocked only when the"
+Write-Host "project validate entrypoint fails, for example ./scripts/validate-quick.ps1."
+Write-Host "Raw node/npm/npx/bun failures outside harness entrypoints are not validation gates."
+Write-Host ""
 
 Write-Check "PowerShell" ($PSVersionTable.PSVersion.Major -ge 7) "version $($PSVersionTable.PSVersion)"
 Write-Check "Operating system" $IsWindows $(if ($IsWindows) { "Windows" } else { "non-Windows" })
@@ -65,7 +69,7 @@ if ($node) {
   $nodeVersion = & node --version 2>&1
   Write-Check "node version" ($LASTEXITCODE -eq 0) ($nodeVersion -join " ")
   $spawn = & node -e "const r=require('node:child_process').spawnSync(process.execPath,['-v'],{stdio:'pipe'}); process.exit(r.status ?? 1)" 2>&1
-  Write-Check "node child_process" ($LASTEXITCODE -eq 0) $(if ($LASTEXITCODE -eq 0) { "spawnSync ok" } else { ($spawn -join " ") })
+  Write-Check "node child_process" ($LASTEXITCODE -eq 0) $(if ($LASTEXITCODE -eq 0) { "spawnSync ok" } else { "WARN only unless validate entrypoint fails: " + ($spawn -join " ") })
 }
 
 $npm = Get-Command npm -ErrorAction SilentlyContinue
