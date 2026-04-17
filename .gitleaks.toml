@@ -1,0 +1,63 @@
+# .gitleaks.toml
+#
+# Gitleaks 설정. 기본 rule set에 프로젝트 고유 패턴을 확장합니다.
+# 참고: https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+
+[extend]
+useDefault = true
+
+# ── 커스텀 규칙 ──
+
+[[rules]]
+id = "internal-api-key"
+description = "사내 API 키 형식"
+regex = '''(?i)(internal[_-]?api[_-]?key)[[:space:]]*[:=][[:space:]]*["']?[A-Za-z0-9_\-]{16,}["']?'''
+tags = ["key", "internal"]
+
+[[rules]]
+id = "database-url-with-password"
+description = "비밀번호가 포함된 DB 연결 URL"
+regex = '''(?i)(postgres|postgresql|mysql|mongodb|redis)://[^:/?#\s]+:[^@/?#\s]+@'''
+tags = ["database", "password"]
+
+[[rules]]
+id = "jwt-or-session-secret"
+description = "JWT/세션 시크릿 값 직접 노출"
+regex = '''(?i)(jwt[_-]?secret|session[_-]?secret|auth[_-]?secret)[[:space:]]*[:=][[:space:]]*["']?[A-Za-z0-9+/=_\-]{20,}["']?'''
+tags = ["jwt", "session", "secret"]
+
+[[rules]]
+id = "korean-company-ssh-key-label"
+description = "SSH 키 식별자로 회사명 포함"
+regex = '''BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY'''
+tags = ["ssh", "private-key"]
+
+# ── 허용(false positive 제외) 규칙 ──
+# test/mock/fixture/template 파일은 시크릿 형식이 자주 등장함
+
+[allowlist]
+description = "Gitleaks allowlist"
+paths = [
+  '''tests/.*''',
+  '''__tests__/.*''',
+  '''__mocks__/.*''',
+  '''fixtures/.*''',
+  '''src/generated/.*''',
+  '''.*\.test\..*''',
+  '''.*\.spec\..*''',
+  '''.*\.example\..*''',
+  '''.*\.template\..*''',
+  '''\.github/.*''',
+  '''docs/.*\.md''',
+  '''README\.md''',
+  '''CHANGELOG\.md''',
+]
+
+# 명시적 allowlist 값 (false positive로 확인된 것만)
+regexes = [
+  '''"token"[[:space:]]*:[[:space:]]*"\$\{[A-Z_]+\}"''',
+  '''<YOUR_API_KEY>''',
+  '''your[_-]?api[_-]?key[_-]?here''',
+  '''xxx+''',
+  '''0{8,}''',
+]

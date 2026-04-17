@@ -1,0 +1,71 @@
+# .github/workflows/security.yml
+#
+# 보안 검증 워크플로우 — Phase 1 (시크릿·SAST) + Phase 2 (Trivy)
+# 트리거: main/develop push, PR, 주간 스케줄 (매주 월요일 09:00 KST = 00:00 UTC)
+#
+# Jobs:
+#   gitleaks      — 시크릿 유출 감지 (히스토리 전체 스캔)
+#   codeql        — JavaScript/TypeScript SAST
+#   (Phase 2에서 trivy-deps, trivy-image job 추가됨)
+#
+# 결과는 GitHub Security 탭에 표시됨 (SARIF 업로드).
+# PR 차단 조건은 scripts/setup/setup-repo.sh의 branch protection에서 설정.
+
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * 1'  # 매주 월요일 00:00 UTC (09:00 KST)
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 전체 히스토리 스캔 필수
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  codeql:
+    name: codeql
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
