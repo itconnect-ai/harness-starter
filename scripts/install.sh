@@ -4,7 +4,7 @@
 #
 # Harness Engineering Starter Kit의 **필수 파일만** 다른 프로젝트에 설치.
 # 전체 clone 대신 이 스크립트로 받으면:
-#   - BMAD 스킬 디렉토리(.agents/skills, .claude/skills)는 제외 → npm으로 설치
+#   - BMAD 스킬 디렉토리(.agents/skills, .claude/skills)는 제외 → 기존 설치 사용
 #   - docs/changelog/ 등 template 전용 파일 제외
 #   - 파일 수 ~2,400개 → ~250개로 축소
 #   - 다른 프로젝트 소스코드와 충돌 위험 최소화
@@ -26,8 +26,7 @@
 #
 # 설치 후 다음 단계:
 #   1. ./scripts/setup/init-harness.sh  # git hooks + GitHub 보안 설정
-#   2. npx bmad-method install           # BMAD 스킬 설치
-#   3. README.md 4단계 프롬프트 실행      # 프로젝트 초기화
+#   2. README.md Setup 1/2 프롬프트 실행 # 프로젝트 초기화
 # ============================================================================
 set -e
 
@@ -240,9 +239,6 @@ elif [ "$COPIED" -gt 0 ]; then
   echo "  1. ./scripts/setup/init-harness.sh"
   echo "     (git hooks + GitHub 보안 설정 자동화)"
   echo ""
-  echo "  2. npx bmad-method install"
-  echo "     (BMAD 스킬 설치)"
-  echo ""
-  echo "  3. README.md 4단계 프롬프트를 Claude Code에서 실행"
+  echo "  2. README.md Setup 1/2 프롬프트를 Claude Code에서 실행"
   echo "     (프로젝트 초기화 + 하네스 커스터마이징)"
 fi
