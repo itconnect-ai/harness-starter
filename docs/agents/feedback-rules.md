@@ -35,6 +35,12 @@
 - 규칙: Windows/Codex에서 raw JS 런타임 sanity check 실패만으로 story 구현을 중단하지 않는다. 반드시 현재 OS/셸에 맞는 하네스 검증 entrypoint 결과로 판정한다.
 - 승격 상태: active
 
+### 5. GitHub preflight uses gh on Codex Windows (codex-windows-gh-preflight)
+- source: 2026-04-17-codex-windows-github
+- 발견: raw `git fetch origin develop` 또는 GitHub HTTPS 접근이 Codex Windows 기본 env 누락 상태에서 `getaddrinfo() thread failed to start`로 실패할 수 있다. 같은 세션에서 env 복구 후 `gh api repos/<repo>/git/ref/heads/develop`는 통과했다.
+- 규칙: Windows/Codex에서 GitHub 원격 사전 조건은 raw `git fetch`로 판정하지 않는다. `./scripts/phase-a/preflight.ps1 -Epic <N>` 또는 `scripts/lib/git-utils.ps1`의 `gh api` 경로를 사용한다. 이 경로에서 토큰 없음/권한 부족이 확인될 때만 사용자에게 새 PAT를 요청한다.
+- 승격 상태: active
+
 <!-- 예시 형식:
 ### 1. 테스트 누락 (missing-tests)
 - source: epic-1-story-3

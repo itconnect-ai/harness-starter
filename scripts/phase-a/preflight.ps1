@@ -26,11 +26,8 @@ if ($LASTEXITCODE -ne 0) { Stop-Setup2 }
 & git remote get-url origin *> $null
 if ($LASTEXITCODE -ne 0) { Stop-Setup2 }
 
-$fetch = Invoke-HarnessGitFetch -Ref "develop"
-if ($fetch.ExitCode -ne 0) { Stop-Setup2 }
-
-& git rev-parse origin/develop *> $null
-if ($LASTEXITCODE -ne 0) { Stop-Setup2 }
+$remoteDevelop = Test-HarnessGitHubRemoteRef -Ref "develop"
+if (-not $remoteDevelop.Ok) { Stop-Setup2 }
 
 if (-not (Test-Path -LiteralPath ".agents/skills/bmad-create-story")) { Stop-Setup2 }
 if (-not (Test-Path -LiteralPath ".agents/skills/bmad-dev-story")) { Stop-Setup2 }

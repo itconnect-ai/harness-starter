@@ -63,6 +63,25 @@ if ($git) {
   Write-Check "origin remote" ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($origin)) $(if ($origin) { Format-SafeUrl -Value $origin } else { "not configured" })
 }
 
+$gh = Get-Command gh -ErrorAction SilentlyContinue
+Write-Check "gh" ($null -ne $gh) $(if ($gh) { $gh.Source } else { "not found" })
+if ($gh) {
+  try {
+    $ghState = Initialize-HarnessGitHubCli -RequireAuth
+    Write-Check "gh auth token" $ghState.HasToken "token available via GH_TOKEN or git credential helper"
+
+    if ($git) {
+      $branch = (& git rev-parse --abbrev-ref HEAD 2>$null)
+      if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($branch)) {
+        $remoteBranch = Test-HarnessGitHubRemoteRef -Ref $branch.Trim()
+        Write-Check "gh api current ref" $remoteBranch.Ok $(if ($remoteBranch.Ok) { "$($remoteBranch.RepoSlug)/$($remoteBranch.Ref)" } else { $remoteBranch.Output -join " " })
+      }
+    }
+  } catch {
+    Write-Check "gh api current ref" $false $_.Exception.Message
+  }
+}
+
 $node = Get-Command node -ErrorAction SilentlyContinue
 Write-Check "node" ($null -ne $node) $(if ($node) { $node.Source } else { "not found" })
 if ($node) {

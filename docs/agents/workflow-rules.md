@@ -18,6 +18,7 @@ Epic 시작 전:
 2. 현재 OS/셸에 맞는 preflight를 실행한다.
    - Windows PowerShell: `./scripts/phase-a/preflight.ps1 -Epic <N>`
    - bash/WSL/macOS/Linux: README의 Loop A 사전 조건 또는 `scripts/phase-a/preflight.sh`가 있는 경우 해당 스크립트
+3. Windows/Codex에서 GitHub 원격 브랜치 존재 여부는 raw `git fetch origin develop`가 아니라 `gh api repos/<owner>/<repo>/git/ref/heads/develop` 경로로 확인한다.
 
 각 story마다 순서대로:
 1. `bmad-create-story` 스킬로 story 파일 생성 (풀 컨텍스트 엔진)
@@ -47,6 +48,8 @@ Epic의 모든 story 완료 후:
 **Windows/Codex 원칙:** `.ps1` entrypoint는 native PowerShell 경로다. Git Bash 또는 WSL을 내부 필수 의존성으로 삼지 않는다. Bash 기반 hook이 실패하면 native validate/check 통과 후에만 no-verify fallback을 사용한다.
 
 **Windows/Codex JS 런타임 판정:** raw `node`, `npm`, `npx`, `bun` sanity check 실패만으로 Phase A를 중단하지 않는다. Codex Windows 프로세스는 기본 Windows env가 비어 있을 수 있고, harness entrypoint가 이를 복구한다. 작업 가능 여부는 `./scripts/validate-quick.ps1` 또는 `./scripts/validate.ps1` 실패로만 판정한다. `doctor.ps1`의 `node child_process` 경고는 worker/fork-heavy 도구 주의 신호이지 단독 중단 사유가 아니다.
+
+**Windows/Codex GitHub 판정:** GitHub 읽기/사전 조건 확인은 `gh`를 사용한다. `scripts/lib/git-utils.ps1`는 Windows 기본 env를 복구하고, `GH_TOKEN`이 없으면 Git credential helper의 GitHub 토큰을 재사용한다. `fatal: unable to access ... getaddrinfo() thread failed to start`가 raw git 네트워크 호출에서 발생하면 원격 장애로 단정하지 말고 `./scripts/phase-a/preflight.ps1 -Epic <N>`로 재확인한다. 이 경로에서 토큰 없음/권한 부족이 확인될 때만 새 PAT를 요청한다.
 
 Codex Desktop 모델 설정:
 - 모델: chatgpt-5.4
