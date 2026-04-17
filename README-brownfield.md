@@ -43,51 +43,189 @@ Claude Code를 열고 **아래 프롬프트 전체를 복사해서 실행**.
 
 ## 0. 사전 조건 검증 (최우선, 실패 시 중단)
 
-아래 중 하나라도 실패하면 stop하고 사용자에게 보고:
+각 항목 실패 시 **어디서 실패했는지** 사용자에게 명확히 보고하고 중단.
 
-1. **install.sh 설치 결과물 확인** (install.sh 파일 자체가 아닌, 설치로
-   생긴 파일들):
-   ```bash
-   test -d docs/agents && test -f scripts/validate.sh && test -f .githooks/pre-commit
-   ```
-   위 3개 중 하나라도 없으면 → "1단계 install.sh(또는 install.ps1)를 먼저
-   실행해 주세요" 출력 후 중단.
+### 0-1. install.sh 설치 결과물 확인
+install.sh 파일 자체가 아닌, 설치로 생긴 결과물 확인:
+```bash
+if ! (test -d docs/agents && test -f scripts/validate.sh && test -f .githooks/pre-commit); then
+  echo "STOP [0-1]: harness 설치 결과물이 없습니다."
+  echo "  1단계 install.sh(또는 install.ps1)를 먼저 실행해 주세요."
+  exit 1
+fi
+```
 
-2. **작업 디렉토리 고정**: 모든 명령을 프로젝트 루트에서 실행.
-   세션 시작 시 한 번:
-   ```
-   cd "$(git rev-parse --show-toplevel)"
-   ```
+### 0-2. 작업 디렉토리 고정
+```bash
+cd "$(git rev-parse --show-toplevel)" || { echo "STOP [0-2]: git repo 아님"; exit 1; }
+```
 
-3. **git 상태 확인**: `git status --porcelain`의 출력이 비어있지 않으면
-   uncommitted 변경 있음. 사용자에게 아래 중 하나 선택 요청:
-   - `git stash push -m "pre-harness-integration"` 후 진행 (끝에 pop 안내)
-   - 먼저 `git commit` 후 진행
-   - 중단
+### 0-3. Git 상태 분리 판정 (install 산출물 vs 기존 변경)
 
-4. **PowerShell cmdlet 호출 금지**: AI가 Claude Code의 Bash 도구를 쓰는
-   한 bash 환경이 보장됨. 별도 체크 불필요. 단, 프롬프트 전반에서
-   PowerShell 전용 명령(`Remove-Item`, `Get-Content` 등) 호출 금지. 모든
-   명령은 bash 문법만 사용.
+Brownfield 정상 경로에서는 install.sh 직후 harness 파일들이 uncommitted
+상태입니다. 이 경우 즉시 중단하지 말고 **install 산출물만 dirty인지, 아니면
+기존 사용자 변경이 섞였는지** 판별:
 
-5. **세션 TIMESTAMP 고정**: 아래를 세션 시작 시 **단 한 번** 설정하고
-   이후 모든 백업 파일명에 재사용.
-   ```
-   TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-   ```
+```bash
+# harness 설치 경로 (install.sh의 ESSENTIAL_PATHS와 일치)
+HARNESS_RE='^(CLAUDE\.md|AGENTS\.md|REVIEW\.md|README-brownfield\.md|\.gitattributes|\.gitleaks\.toml|docs/agents/|docs/checklists/|docs/future-upgrades/|docs/decisions/README\.md|docs/org/docker-port-registry\.template\.md|templates/|scripts/|\.claude/hooks/|\.claude/settings\.json|\.githooks/|\.github/workflows/(ci|security|release|deploy|dependabot-auto-merge)\.yml|\.github/dependabot\.yml|state/learning-loop\.json|state/progress-template\.json|state/README\.md|feedback/incident-template\.yaml|feedback/incidents/README\.md|reviews/README\.md|plans/README\.md|private/README\.md)'
 
-6. **docs/legacy/ 디렉토리 사전 생성**:
-   ```
-   mkdir -p docs/legacy
-   ```
+TOTAL_DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
+NON_HARNESS_DIRTY=$(git status --porcelain | awk '{ $1=""; sub(/^ /,""); print }' \
+  | grep -Ev "$HARNESS_RE" | grep -c . || true)
 
-7. **멱등성 체크** (재실행 시): 이전 실행의 흔적이 있으면 중복 작업을
-   피하기 위해 감지:
-   - `git log --oneline | grep -c "chore(harness):"` — 이전 harness 통합
-     commit이 3개 이상이면 이미 실행됨. 사용자에게 "이미 harness 통합
-     이력 감지됨. 차이분만 적용할까요, 아니면 중단할까요?" 질문.
-   - `docs/legacy/*.bak` 파일이 있으면 이전 실행의 백업. 이번 실행은
-     `${TIMESTAMP}` 접미사로 자동 구분되므로 덮어쓰지 않음.
+case "$TOTAL_DIRTY:$NON_HARNESS_DIRTY" in
+  0:*)
+    echo "[0-3] working tree clean — 진행"
+    NEED_BASE_COMMIT=false
+    ;;
+  *:0)
+    echo "[0-3] harness 설치 산출물만 dirty — base commit 생성 후 진행"
+    NEED_BASE_COMMIT=true
+    ;;
+  *)
+    echo "STOP [0-3]: harness 무관한 기존 변경 ${NON_HARNESS_DIRTY}건 감지됨."
+    echo "  다음 중 선택해 주세요:"
+    echo "    (a) git stash push -m 'pre-harness' 후 진행 (끝에 pop 안내)"
+    echo "    (b) 먼저 git commit 후 이 프롬프트 재실행"
+    echo "    (c) 중단"
+    echo "  혼재된 상태에서 진행하면 이번 harness commit에 무관한 변경이 섞입니다."
+    exit 1
+    ;;
+esac
+```
+
+사용자가 (a) stash를 선택했으면 실행 후 진행. 완료 후 9단계 보고에
+`git stash pop` 안내 추가.
+
+### 0-4. PowerShell cmdlet 호출 금지
+AI가 Claude Code의 Bash 도구를 쓰는 한 bash 환경이 보장됩니다. 프롬프트
+전반에서 PowerShell 전용 명령(`Remove-Item`, `Get-Content` 등) 호출 금지.
+모든 명령은 bash 문법만 사용.
+
+### 0-5. 세션 상태 파일 생성 (`state/harness-integration/session.env`)
+
+**중요**: Claude/Codex의 Bash tool은 각 호출이 **새 프로세스**입니다.
+`TIMESTAMP=$(date ...)` 같은 shell 변수는 다음 호출에서 사라집니다. 따라서
+세션 상태를 파일에 저장하고 매 단계 시작 시 source:
+
+```bash
+mkdir -p state/harness-integration
+
+# 재실행 시 기존 session.env가 있으면 유지 (TIMESTAMP 고정 보장)
+if [ -f state/harness-integration/session.env ]; then
+  # shellcheck disable=SC1091
+  . state/harness-integration/session.env
+  echo "[0-5] 기존 session.env 로드 — TIMESTAMP=$TIMESTAMP"
+else
+  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+  cat > state/harness-integration/session.env <<EOF
+# Harness brownfield integration session — 이 파일은 단계 간 상태 공유용
+TIMESTAMP=$TIMESTAMP
+NEED_BASE_COMMIT=${NEED_BASE_COMMIT:-false}
+EOF
+  echo "[0-5] session.env 신규 생성 — TIMESTAMP=$TIMESTAMP"
+fi
+```
+
+### 0-6. 공용 helper 함수 정의 (`state/harness-integration/helpers.sh`)
+
+단계 간 재사용되는 bash 함수를 파일로 저장하고 source:
+
+```bash
+cat > state/harness-integration/helpers.sh <<'EOF'
+# 단계 간 공용 helper 함수
+
+# 방어 구문: 사용 전 필수 변수 확인
+require_timestamp() {
+  : "${TIMESTAMP:?TIMESTAMP not set — state/harness-integration/session.env 재생성 필요}"
+}
+
+# 파일/디렉토리가 실제 존재할 때만 git add (백업 파일이 없을 때 실패 방지)
+stage_if_exists() {
+  local p
+  for p in "$@"; do
+    if [ -e "$p" ]; then
+      git add -- "$p"
+    fi
+  done
+}
+
+# staged 변경이 없으면 commit 생략
+commit_if_staged() {
+  local msg="$1"
+  if git diff --cached --quiet; then
+    echo "  (staged 변경 없음 — commit 생략)"
+    return 0
+  fi
+  git commit -m "$msg"
+}
+
+# 파일이 있을 때만 rm (rm -f로 통일해 없는 파일 오류 차단)
+rm_if_exists() {
+  local p
+  for p in "$@"; do
+    [ -e "$p" ] && rm -f -- "$p"
+  done
+}
+
+# 백업 생성: symlink/권한/모드 보존 (cp -a)
+backup_to_legacy() {
+  local src="$1"
+  require_timestamp
+  mkdir -p docs/legacy
+  cp -a -- "$src" "docs/legacy/$(basename "$src").${TIMESTAMP}.bak"
+}
+EOF
+echo "[0-6] helpers.sh 생성"
+```
+
+이후 **모든 단계는 시작 시** 다음 3줄로 세션 상태 복원:
+```bash
+cd "$(git rev-parse --show-toplevel)"
+. state/harness-integration/session.env
+. state/harness-integration/helpers.sh
+require_timestamp
+```
+
+### 0-7. docs/legacy/ 디렉토리 사전 생성
+```bash
+mkdir -p docs/legacy
+```
+
+### 0-8. 멱등성 체크 (재실행 시)
+
+이전 실행의 흔적 감지:
+- `git log --oneline | grep -c "chore(harness):"` ≥ 5 면 **이미 통합 완료** 상태
+  (base commit + 최소 .gitignore/.gitattributes/CLAUDE/AGENTS 4~5개 이상)
+- 이 경우 사용자에게 3가지 선택지 제시:
+  1. **차이분만 재적용** (권장): 현재 상태와 harness 기준을 비교해 누락된
+     항목만 추가. 이미 병합된 내용은 skip.
+  2. **특정 단계만 재실행**: 단계 번호 지정 (예: "4-3만 재실행").
+  3. **중단**.
+
+`docs/legacy/*.bak`는 새 `${TIMESTAMP}` 접미사로 자동 구분되므로 덮어쓰지
+않습니다. 같은 날 재실행 시 초 단위 timestamp가 달라야 하는데, 0-5에서
+session.env가 있으면 기존 TIMESTAMP 유지이므로 **재실행은 세션이 끝난 뒤**
+`rm state/harness-integration/session.env` 후 다시 0단계부터.
+
+### 0-9. Base commit (NEED_BASE_COMMIT=true인 경우)
+
+0-3에서 harness 산출물만 dirty라고 판정됐으면 여기서 base commit:
+
+```bash
+. state/harness-integration/session.env
+if [ "${NEED_BASE_COMMIT:-false}" = "true" ]; then
+  # harness 경로만 정확히 staging
+  git status --porcelain | awk '{ $1=""; sub(/^ /,""); print }' \
+    | grep -E "$HARNESS_RE" \
+    | xargs -r -I{} git add -- "{}"
+  git commit -m "chore(harness): install base files"
+  # 이후 단계에서는 NEED_BASE_COMMIT 재확인 불필요
+  sed -i.tmp 's/^NEED_BASE_COMMIT=.*/NEED_BASE_COMMIT=false/' state/harness-integration/session.env
+  rm -f state/harness-integration/session.env.tmp
+fi
+```
 
 ## 1. 현황 분석 (읽기만, 수정 금지)
 
@@ -210,33 +348,109 @@ git ls-files | grep -v -E '^(node_modules|\.git|dist|build|coverage|vendor|\.ven
 
 ## 2. 사용자 승인 (일괄 게이트 — 단 1회)
 
-분석 출력(A~E)을 보여준 뒤 **한 번에 묻고** 대답을 기다리세요:
+분석 출력(A~E)을 보여준 뒤 **반드시 멈추고** 답변을 기다리세요. 사용자
+응답 전 어떤 파일도 수정 금지.
+
+**D 항목 감지 여부에 따라 승인 방식이 달라집니다**:
+
+### 2-a. D 항목이 하나도 감지되지 않은 경우
+
+아래 4개가 모두 "해당 없음"일 때만:
+- husky: `.husky/` 디렉토리 없음
+- 기존 GH Actions `ci.yml`: `.github/workflows/ci.yml` 없음 또는 harness와
+  동일 (rename 불필요)
+- 기존 비 GH Actions CI: 감지 안 됨
+- Monorepo: workspaces/turbo/nx/lerna 감지 안 됨
+
+이 경우 **"yes" 단독 답변으로 진행**.
 
 ```
-위 계획 전체로 진행할까요?
-  - yes: 계획대로 실행 (C 교체 + E 커스터마이징 모두 자동)
-  - no: 중단
-  - 항목 제외: "C의 CLAUDE.md 3번째 항목 제외" 같은 형식으로 지정
-  - D의 선택은 아래 답변에 포함:
-      husky: A 또는 B
-      CI rename: yes 또는 no
-      기존 CI 처리: a/b/c
-      monorepo: root-only 또는 per-package
+위 계획으로 진행할까요? [yes / no]
 ```
 
-"yes"만 답하면 → D 기본값: husky A, CI rename yes, 기존 CI b(병행), monorepo root-only.
+### 2-b. D 항목이 하나라도 감지된 경우
 
-사용자 응답 전에는 어떤 파일도 수정 금지.
+"yes" 단독 답변은 **거부**합니다. 위험 경고를 먼저 출력하고, 각 항목에
+명시 답변 또는 `use defaults`를 요구하세요:
+
+```
+⚠ 아래 D 항목은 팀 workflow·branch protection·데이터에 영향을 줍니다.
+  기본값만 "yes"로 적용하면 의도치 않은 부작용이 발생할 수 있습니다.
+
+감지된 D 항목:
+  - husky: 감지됨 / 감지 안 됨
+  - CI rename: ci.yml의 기존 job id '<감지된 id>' 발견 — rename 필요 여부
+  - 기존 비 GH Actions CI: '<감지된 시스템>' / 없음
+  - Monorepo: '<감지된 도구>' / 없음
+
+기본값 적용 시 발생하는 부작용:
+  - husky A: 기존 husky 훅 제거 + .githooks로 전환. 팀원이 pull 후
+    scripts/setup/install-git-hooks.sh를 재실행해야 훅 활성화.
+  - CI rename yes: 기존 job id/name이 'quality-gate'로 변경됨. 현재
+    branch protection의 required status checks가 기존 이름을 참조 중이면
+    **PR 영원히 대기** 발생. 마지막 7단계에서 setup-repo.sh 재실행으로
+    이름 동기화 필요.
+  - 기존 CI b(병행): 기존 GitLab CI 등과 harness GH Actions가 동시
+    빌드 — 리소스·시간 2배.
+  - monorepo root-only: 각 패키지의 validate가 루트에서 일괄 돌아가
+    일부 패키지 이슈 누락 가능.
+
+다음 중 하나로 답변해 주세요:
+
+(1) 명시 답변 — 각 항목에 yes/no/선택 지정
+    husky: A 또는 B
+    CI rename: yes 또는 no
+    기존 CI 처리: a / b / c
+    monorepo: root-only / per-package
+
+(2) "use defaults" — 위 부작용을 인지하고 기본값 일괄 적용 선언
+    (husky A / CI rename yes / 기존 CI b / monorepo root-only)
+
+(3) "no" — 중단
+```
+
+**파싱 규칙**:
+- `"yes"` 단독 답변 → **거부하고 재질문**. "D 항목 감지됨. (1)(2)(3) 중
+  선택해 주세요"로 응답.
+- `"use defaults"` → 기본값 일괄 적용 + 사용자에게 "위 부작용을 이해한
+  것으로 간주합니다" 고지.
+- (1) 명시 답변 → 답변된 값 그대로 적용. 누락 항목은 감지 안 됐거나 기본값
+  적용이 안전한 항목으로 간주 (별도 질문 없이 진행).
+
+### 2-c. 답변 저장
+
+사용자 답변을 session.env에 기록하여 3단계 이후에서 재사용:
+
+```bash
+cat >> state/harness-integration/session.env <<EOF
+HUSKY_OPTION=<A|B|none>
+CI_RENAME=<yes|no|none>
+EXISTING_CI_ACTION=<a|b|c|none>
+MONOREPO_SCOPE=<root-only|per-package|none>
+EOF
+```
 
 ## 3. 단계별 자동 병합
 
-각 단계마다 **정확한 파일만 `git add`** 하여 독립 commit. 다른 변경이
-섞이지 않도록.
+**모든 단계 시작 시** 아래 3줄로 세션 상태 복원:
+```bash
+cd "$(git rev-parse --show-toplevel)"
+. state/harness-integration/session.env
+. state/harness-integration/helpers.sh
+require_timestamp
+```
+
+각 단계마다 `stage_if_exists` + `commit_if_staged` 패턴을 사용해
+조건부 staging·commit을 수행합니다. 대상 파일이 없거나 staged 변경이
+없으면 **commit은 자동 생략**됩니다.
 
 **3-1. .gitignore 병합** (`chore(harness): merge .gitignore rules`)
 
-기존 파일 끝에 append (중복 라인 제외):
-```
+기존 파일 끝에 append (중복 라인 제외). 헤더 이미 있으면 전체 skip:
+```bash
+if ! grep -q "── Harness Engineering rules ──" .gitignore 2>/dev/null; then
+  cat >> .gitignore <<'EOF'
+
 # ── Harness Engineering rules ──────────────────────
 state/validate/
 state/db-backups/
@@ -244,29 +458,80 @@ private/*
 !private/README.md
 docs/org/docker-port-registry.md
 docs/org/*.local.md
-```
+EOF
+fi
 
-```
-git add .gitignore
-git commit -m "chore(harness): merge .gitignore rules"
+stage_if_exists .gitignore
+commit_if_staged "chore(harness): merge .gitignore rules"
 ```
 
 **3-2. .gitattributes 병합** (`chore(harness): merge .gitattributes`)
 
-기존에 `*.sh eol=lf` 없으면 추가. `.githooks/* eol=lf` 추가.
-```
-git add .gitattributes
-git commit -m "chore(harness): merge .gitattributes"
+기존에 없는 규칙만 append:
+```bash
+if [ -f .gitattributes ]; then
+  grep -q '^\*\.sh.*eol=lf' .gitattributes || echo '*.sh text eol=lf' >> .gitattributes
+  grep -q '^\.githooks/\*' .gitattributes || echo '.githooks/* text eol=lf' >> .gitattributes
+else
+  cat > .gitattributes <<'EOF'
+*.sh text eol=lf
+.githooks/* text eol=lf
+EOF
+fi
+
+stage_if_exists .gitattributes
+commit_if_staged "chore(harness): merge .gitattributes"
 ```
 
 **3-3. CLAUDE.md 병합 + 모순 교체** (`chore(harness): align CLAUDE.md with harness`)
 
 3-a. 기존 CLAUDE.md가 있고 1-b에서 감지한 모순 구문이 있으면:
-- `cp CLAUDE.md docs/legacy/CLAUDE.md.${TIMESTAMP}.bak`
+```bash
+backup_to_legacy CLAUDE.md   # cp -a로 symlink/권한 보존 + TIMESTAMP 접미사
+```
 - 모순되는 섹션을 harness 기준 문구로 치환 (섹션 단위)
 - 한 섹션 안에서 일부만 모순이면 그 부분만 치환, 주변 맥락 보존
 
-3-b. `@import` 지시 섹션이 없으면 파일 끝에 추가 (12개 규칙 파일 import).
+3-b. `@import` 지시 **누락분만 추가** (전체 추가 아님):
+
+기존 CLAUDE.md에 `@import` 섹션이 이미 있으면 현재 참조된 규칙 파일을
+파싱하고, harness 12개 중 **누락된 것만** append:
+
+```bash
+HARNESS_IMPORTS=(
+  "@AGENTS.md"
+  "@REVIEW.md"
+  "@docs/agents/architecture-rules.md"
+  "@docs/agents/coding-rules.md"
+  "@docs/agents/testing-rules.md"
+  "@docs/agents/workflow-rules.md"
+  "@docs/agents/security-rules.md"
+  "@docs/agents/performance-rules.md"
+  "@docs/agents/deploy-rules.md"
+  "@docs/agents/docker-rules.md"
+  "@docs/agents/migration-rules.md"
+  "@docs/agents/backup-rules.md"
+  "@docs/agents/feedback-rules.md"
+  "@docs/agents/seo-rules.md"
+)
+
+MISSING=()
+for imp in "${HARNESS_IMPORTS[@]}"; do
+  if [ -f CLAUDE.md ]; then
+    grep -Fq "$imp" CLAUDE.md || MISSING+=("$imp")
+  else
+    MISSING+=("$imp")
+  fi
+done
+
+if [ "${#MISSING[@]}" -gt 0 ]; then
+  {
+    echo ""
+    echo "# ── Harness @import (누락분만 자동 추가) ──"
+    printf '%s\n' "${MISSING[@]}"
+  } >> CLAUDE.md
+fi
+```
 
 3-c. "Build, Test & Quality" 섹션을 **감지된 패키지 매니저 + scripts로
 생성/업데이트**. 4개 명령(lint / typecheck / test / build) 각각에 대해
@@ -295,114 +560,311 @@ git commit -m "chore(harness): merge .gitattributes"
 
 기존 CLAUDE.md 없으면 3-c만 수행 (install.sh로 이미 설치됨).
 
-```
-git add CLAUDE.md docs/legacy/CLAUDE.md.${TIMESTAMP}.bak
-git commit -m "chore(harness): align CLAUDE.md with harness"
+```bash
+# 백업 파일은 3-a에서 생성된 경우에만 존재. stage_if_exists가 처리.
+stage_if_exists CLAUDE.md "docs/legacy/CLAUDE.md.${TIMESTAMP}.bak"
+commit_if_staged "chore(harness): align CLAUDE.md with harness"
 ```
 
 **3-4. AGENTS.md 병합 + 모순 교체** (`chore(harness): align AGENTS.md with harness`)
 
 4-a. 기존 AGENTS.md에 1-b 모순 있으면:
-- `cp AGENTS.md docs/legacy/AGENTS.md.${TIMESTAMP}.bak`
-- 모순 섹션 치환
+```bash
+backup_to_legacy AGENTS.md
+```
+모순 섹션 치환.
 
 4-b. "Docker & DB 작업 의무 규칙" 섹션이 없으면 추가.
-4-c. "참조 파일" 목록이 없거나 불완전하면 harness 기준 12개 규칙 파일로
-     교체/추가.
+4-c. "참조 파일" 목록이 없거나 불완전하면 harness 기준 12개 규칙 파일
+     중 **누락분만** 추가 (3-b의 누락분 패턴과 동일).
 4-d. "Repo map" 섹션이 있으면 **기존 포맷 유지하며** 실제 디렉토리 구조로
      업데이트 (`git ls-files | head`, `ls src/`, `ls apps/` 결과 참고).
 
-```
-git add AGENTS.md docs/legacy/AGENTS.md.${TIMESTAMP}.bak
-git commit -m "chore(harness): align AGENTS.md with harness"
+```bash
+stage_if_exists AGENTS.md "docs/legacy/AGENTS.md.${TIMESTAMP}.bak"
+commit_if_staged "chore(harness): align AGENTS.md with harness"
 ```
 
 **3-4b. README.md 모순 교체** (`chore(harness): align README.md with harness`)
 
 기존 README.md에 1-b 모순이 있으면:
-- `cp README.md docs/legacy/README.md.${TIMESTAMP}.bak`
-- 모순 섹션만 치환. 프로젝트 고유 소개/설치/라이선스 등 harness와 무관한
-  내용은 보존.
-
-모순 없으면 skip.
+```bash
+backup_to_legacy README.md
 ```
-git add README.md docs/legacy/README.md.${TIMESTAMP}.bak
-git commit -m "chore(harness): align README.md with harness"
+모순 섹션만 치환. 프로젝트 고유 소개/설치/라이선스 등 harness와 무관한
+내용은 보존.
+
+모순 없으면 이 단계 전체 skip (백업도 만들지 않음).
+
+```bash
+stage_if_exists README.md "docs/legacy/README.md.${TIMESTAMP}.bak"
+commit_if_staged "chore(harness): align README.md with harness"
 ```
 
 **3-5. husky 충돌 해결** (`chore(harness): resolve husky conflict`)
 
-`.husky/` 디렉토리 있을 때 D에서 선택된 옵션 실행:
+`.husky/` 디렉토리 없으면 이 단계 전체 skip.
 
-- **옵션 A (harness 통일)**:
-  1. `mv .husky .husky.backup.${TIMESTAMP}` (원본 보존)
-  2. 기존 `.husky/pre-commit` 내용을 `.githooks/pre-commit` **상단**에
-     병합 (harness 내용은 그 아래에 유지)
-  3. `.husky/commit-msg` 있으면 `.githooks/commit-msg`와 병합
-  4. `npm uninstall husky` + package.json scripts에서 `"prepare":
-     "husky install"` 제거
+**husky 버전 감지** (v8과 v9의 제거 명령이 다름):
+```bash
+HUSKY_VER="unknown"
+if [ -f package.json ]; then
+  # prepare script로 버전 식별
+  if grep -qE '"prepare"\s*:\s*"husky install"' package.json; then
+    HUSKY_VER="v8"
+  elif grep -qE '"prepare"\s*:\s*"husky"' package.json; then
+    HUSKY_VER="v9"
+  fi
+fi
 
-- **옵션 B (husky 유지)**: (전제: `.husky/` 디렉토리가 이미 존재)
-  1. `.husky/pre-commit` 파일 처리:
-     - 이미 있으면 → 기존 내용 **상단에 유지**하고 `.githooks/pre-commit`
-       내용을 그 **아래에 append** (덮어쓰지 않음)
-     - 없으면 → `.githooks/pre-commit`을 `.husky/pre-commit`으로 복사
-  2. `.husky/commit-msg`도 동일 로직
-  3. `.githooks/` 디렉토리 제거 (중복 방지)
-  4. `core.hooksPath` 설정하지 않음 (husky가 자체 훅 경로 관리)
-  5. package.json에 `"prepare": "husky install"` (또는 husky 9의 `"prepare":
-     "husky"`)이 없으면 사용자에게 추가 제안
+# 패키지 매니저 감지 (workspace 포함)
+PKG_MGR="npm"
+[ -f pnpm-lock.yaml ] && PKG_MGR="pnpm"
+[ -f yarn.lock ] && PKG_MGR="yarn"
 
+# workspace root 감지 (monorepo 대비)
+WORKSPACE_ROOT=""
+if [ -f pnpm-workspace.yaml ]; then WORKSPACE_ROOT="pnpm-workspace"; fi
+if [ -f package.json ] && grep -q '"workspaces"' package.json; then WORKSPACE_ROOT="npm-yarn-workspaces"; fi
 ```
-git add -A
-git commit -m "chore(harness): resolve husky conflict (option <A|B>)"
+
+`D의 HUSKY_OPTION` 값에 따라 분기:
+
+### 옵션 A (harness 통일)
+
+```bash
+# 1. .husky/ 전체를 docs/legacy/ 로 보존 (symlink/권한 포함)
+backup_to_legacy .husky
+
+# 2. 기존 husky 훅 내용을 harness 훅에 병합 (harness 내용은 유지하고 그
+#    아래에 기존 내용 append — 순서 중요: 기존 커스텀 로직은 "먼저" 실행
+#    되도록 상단 배치)
+for hook in pre-commit commit-msg pre-push; do
+  if [ -f ".husky/$hook" ] && [ -f ".githooks/$hook" ]; then
+    # 1) 백업은 backup_to_legacy로 이미 완료
+    # 2) 기존 내용 → 임시 파일
+    tmp=$(mktemp)
+    # husky shebang/husky.sh import 라인은 제외하고 실제 훅 본문만 추출
+    sed -E '/^#!/d; /husky\.sh/d' ".husky/$hook" > "$tmp"
+
+    # 3) harness 훅의 기존 내용을 새 파일에 기록
+    tmp2=$(mktemp)
+    {
+      head -1 ".githooks/$hook"  # shebang 유지
+      echo ""
+      echo "# ── Legacy hook content from .husky/$hook (migrated by harness) ──"
+      cat "$tmp"
+      echo ""
+      echo "# ── Harness default behavior ──"
+      tail -n +2 ".githooks/$hook"
+    } > "$tmp2"
+    mv "$tmp2" ".githooks/$hook"
+    chmod +x ".githooks/$hook"
+    rm -f "$tmp"
+  fi
+done
+
+# 3. husky 제거 (패키지 매니저·버전별 명령)
+case "$PKG_MGR" in
+  npm)  npm uninstall husky ;;
+  pnpm) pnpm remove husky ;;
+  yarn) yarn remove husky ;;
+esac
+# workspace라면 루트에서만 제거 (하위 package가 husky를 써도 보통 루트에만 설치됨)
+
+# 4. package.json의 prepare script 제거 (v8/v9 공통 처리)
+if command -v jq >/dev/null 2>&1 && [ -f package.json ]; then
+  tmp=$(mktemp)
+  jq 'if .scripts.prepare then del(.scripts.prepare) else . end' package.json > "$tmp" && mv "$tmp" package.json
+fi
+
+# 5. .husky/ 디렉토리 제거 (이미 backup_to_legacy로 docs/legacy/에 보존됨)
+[ -d .husky ] && rm -rf -- .husky
+
+# 6. .githooks/ 활성화는 이후 6단계 install-git-hooks.sh에서 수행
+```
+
+### 옵션 B (husky 유지)
+
+(전제: `.husky/` 디렉토리 존재)
+
+```bash
+# 1. harness 훅 내용을 husky 훅에 병합
+for hook in pre-commit commit-msg; do
+  if [ -f ".githooks/$hook" ]; then
+    if [ -f ".husky/$hook" ]; then
+      # 기존 husky 훅 보존하고 harness 내용 append
+      {
+        echo ""
+        echo "# ── Harness default behavior (appended by brownfield integration) ──"
+        tail -n +2 ".githooks/$hook"  # shebang 제외
+      } >> ".husky/$hook"
+    else
+      # 복사 (cp -a로 실행권한 보존)
+      cp -a -- ".githooks/$hook" ".husky/$hook"
+    fi
+    chmod +x ".husky/$hook"
+  fi
+done
+
+# 2. .githooks/ 제거 (core.hooksPath와 husky 중복 방지)
+[ -d .githooks ] && rm -rf -- .githooks
+
+# 3. prepare script 확인·추가
+if [ -f package.json ] && ! grep -qE '"prepare"\s*:' package.json; then
+  echo ""
+  echo "⚠ package.json에 prepare script가 없습니다. husky 버전에 맞게 추가:"
+  echo "  v8: \"prepare\": \"husky install\""
+  echo "  v9: \"prepare\": \"husky\""
+  echo "(감지된 버전: $HUSKY_VER)"
+  echo "수동으로 추가해 주세요."
+fi
+```
+
+### commit
+
+```bash
+# 옵션에 따라 변경 파일이 다르므로 경로별 stage_if_exists
+stage_if_exists .husky .githooks package.json pnpm-lock.yaml yarn.lock package-lock.json
+find docs/legacy -maxdepth 1 -name "*.${TIMESTAMP}.bak" -print0 2>/dev/null \
+  | xargs -0 -r git add --
+# 삭제된 파일도 stage (husky 제거 등) — git add는 삭제 추적 안 하므로 -A 사용
+git add -A .husky .githooks 2>/dev/null || true
+commit_if_staged "chore(harness): resolve husky conflict (option ${HUSKY_OPTION:-none})"
 ```
 
 **3-6. CI workflow 병합** (`chore(harness): merge CI workflow`)
 
-**D의 "기존 CI 처리" 답변에 따라 분기**:
+### 3-6-1. 기존 비 GH Actions CI 처리 (EXISTING_CI_ACTION)
 
-**옵션 a (기존 유지 + harness GH Actions 제거)**:
-- 감지된 비 GH Actions CI(GitLab 등) 유지
-- `rm .github/workflows/ci.yml .github/workflows/security.yml
-  .github/workflows/release.yml .github/workflows/deploy.yml
-  .github/workflows/dependabot-auto-merge.yml` — install.sh가 설치한 GH
-  Actions 파일 제거
-- `.github/dependabot.yml`은 유지 (Dependabot은 GitHub 기능이므로 기존 CI
-  시스템과 무관하게 작동)
-- 기존 CI에 Phase 1의 해당하는 job을 추가하라는 **안내만** 출력 (자동
-  변환은 위험 — skip)
+```bash
+. state/harness-integration/session.env
 
-**옵션 b (병행)**:
-- 기존 비 GH Actions CI와 harness GH Actions 둘 다 유지
-- 두 시스템이 동시에 돌면 중복 실행 — 사용자에게 경고:
-  ```
-  ⚠ 기존 <GitLab CI 등>과 harness GH Actions가 동시에 빌드합니다.
-    CI 리소스·시간이 2배로 듭니다. 일정 기간 안정성 확인 후
-    옵션 a 또는 c로 전환 권장.
-  ```
+HARNESS_GH_WORKFLOWS=(
+  ".github/workflows/ci.yml"
+  ".github/workflows/security.yml"
+  ".github/workflows/release.yml"
+  ".github/workflows/deploy.yml"
+  ".github/workflows/dependabot-auto-merge.yml"
+)
 
-**옵션 c (마이그레이션)**:
-- 기존 CI 파일 보존 후 제거:
-  - `.gitlab-ci.yml` → `docs/legacy/.gitlab-ci.yml.${TIMESTAMP}.bak`
-  - 동일하게 Jenkinsfile, `.circleci/config.yml` 등
-- `git rm <기존 CI 파일>`
-- harness GH Actions 유지
+# 기존 비 GH Actions CI 파일 목록
+LEGACY_CI_FILES=()
+for f in .gitlab-ci.yml Jenkinsfile .circleci/config.yml \
+         bitbucket-pipelines.yml azure-pipelines.yml; do
+  [ -e "$f" ] && LEGACY_CI_FILES+=("$f")
+done
 
-**기존 GitHub Actions(`.github/workflows/ci.yml`)가 이미 있는 경우 (옵션과 무관)**:
-- harness의 ci.yml과 diff해서 **누락된 step만** 추가 (coverage, audit
-  upload, docker-build job 등)
-- 기존 trigger(main/develop) 유지
-- D에서 "CI rename yes"면:
-  1. 기존 job 이름을 `quality-gate`로 rename
-  2. job 안의 모든 step은 그대로 유지 (기존 + 추가된 것)
-  3. 이 rename으로 기존 branch protection의 required status checks가
-     깨짐 → 마지막 7단계에서 `setup-repo.sh` 재실행 필수
-
+case "${EXISTING_CI_ACTION:-none}" in
+  a)
+    # 기존 비 GH Actions 유지, harness GH Actions 제거
+    rm_if_exists "${HARNESS_GH_WORKFLOWS[@]}"
+    # .github/dependabot.yml은 유지 (Dependabot은 GitHub 기본 기능)
+    echo "ℹ 기존 CI 유지. Phase 1 해당 job(security/dependabot-auto-merge 등)은"
+    echo "  기존 CI에 수동 이식 필요 — 자동 변환은 위험해 skip."
+    ;;
+  b)
+    # 병행 — 아무것도 제거하지 않음
+    echo "⚠ 기존 CI와 harness GH Actions 병행. CI 리소스·시간 2배."
+    ;;
+  c)
+    # 마이그레이션 — 기존 CI 백업 후 제거
+    for f in "${LEGACY_CI_FILES[@]}"; do
+      backup_to_legacy "$f"
+      rm_if_exists "$f"
+    done
+    ;;
+  none)
+    # 기존 비 GH Actions CI 감지 안 됨 — 아무 작업 없음
+    :
+    ;;
+esac
 ```
-git add .github/workflows/ docs/legacy/    # 옵션 c면 docs/legacy/ 포함
-# 옵션 a면 .gitlab-ci.yml 등은 변경 없음, git rm으로 제거된 파일들만 스테이징
-git commit -m "chore(harness): merge CI workflow (<선택된 옵션>)"
+
+### 3-6-2. 기존 GH Actions `ci.yml` 병합 + matrix rename 분석
+
+```bash
+if [ -f .github/workflows/ci.yml ]; then
+  # install.sh가 덮어쓰지 않았는지 확인: harness ci.yml의 'quality-gate' job
+  # 없으면 기존 ci.yml이 살아있는 상태
+  if ! grep -q "quality-gate:" .github/workflows/ci.yml; then
+    echo "[3-6-2] 기존 ci.yml 감지 — matrix/job 정보 수집"
+    # harness ci.yml 백업 (install.sh가 설치한 버전)
+    # → 이미 3-6-1 옵션 a에서 제거되지 않았다면 docs/legacy/로 보존
+    # 기존 ci.yml은 따로 backup_to_legacy 하지 않음 (덮어쓰기 아닌 merge라)
+
+    # 누락된 step 추가 (coverage/audit upload/docker-build 등):
+    # 실제 diff는 AI가 수동 판단. 기존 step 순서·이름·trigger 보존.
+  fi
+fi
+```
+
+### 3-6-3. CI rename 영향 분석 (CI_RENAME=yes인 경우만)
+
+rename 전에 job 구조를 **반드시 출력**하고 사용자에게 rename 방식 확인:
+
+```bash
+if [ "${CI_RENAME:-no}" = "yes" ] && [ -f .github/workflows/ci.yml ]; then
+  echo "⚠ CI rename 영향 분석"
+  echo ""
+  echo "기존 ci.yml의 job 구조:"
+
+  # yq가 있으면 정밀 파싱, 없으면 grep 기반 근사 분석
+  if command -v yq >/dev/null 2>&1; then
+    yq '.jobs | to_entries[] | {
+      "job_id": .key,
+      "job_name": (.value.name // .key),
+      "matrix_strategy": (.value.strategy.matrix // null),
+      "matrix_values": (.value.strategy.matrix | to_entries // [])
+    }' .github/workflows/ci.yml
+  else
+    # fallback: 대략적 리스트만
+    grep -E '^\s{2}[a-zA-Z0-9_-]+:$' .github/workflows/ci.yml
+    echo "(yq 미설치 — 정밀 분석 불가. 아래 3옵션 중 선택 권장)"
+  fi
+
+  cat <<'ANALYSIS'
+
+예상 required status check 이름:
+  - 일반 job:  <job name>  (없으면 <job id>)
+  - matrix job: <job name> (<matrix value>) — matrix 값별로 별도 check
+
+rename 방식 3옵션:
+
+  (1) job id만 변경 → 'quality-gate'
+      required check 이름도 'quality-gate' (matrix면 'quality-gate (...)')
+      기존 branch protection required checks 이름과 불일치 → PR 대기
+      복구: setup-repo.sh 재실행으로 required checks 재등록
+
+  (2) job name만 변경 → 'Quality Gate'
+      job id 유지. required check는 'Quality Gate' (matrix면
+      'Quality Gate (...)')
+      (1)보다 완만하지만 여전히 기존 protection과 이름 차이
+
+  (3) rename 포기 (권장)
+      기존 job 이름 유지. setup-repo.sh에 기존 job 이름을
+      required check contexts로 등록.
+
+어느 옵션으로 진행할까요? (1/2/3)
+ANALYSIS
+  # 사용자 응답을 CI_RENAME_STYLE=1|2|3 으로 session.env에 저장
+fi
+```
+
+**3옵션 선택 후 실제 변경**은 AI가 YAML 직접 편집 (yq 또는 수동). 각 옵션에 따라 `jobs.<old-id>:` → `jobs.quality-gate:` 또는 `name: ...`만 변경.
+
+### 3-6-4. commit
+
+```bash
+# workflow 파일들과 이번 단계에서 생긴 legacy 백업만 staging
+for f in .github/workflows/*.yml .github/workflows/*.yaml \
+         .github/dependabot.yml; do
+  stage_if_exists "$f"
+done
+# 이번 단계에서 생성된 legacy 백업
+find docs/legacy -maxdepth 1 -name "*.${TIMESTAMP}.bak" -print0 2>/dev/null \
+  | xargs -0 -r git add --
+commit_if_staged "chore(harness): merge CI workflow (action=${EXISTING_CI_ACTION:-none}, rename=${CI_RENAME:-no})"
 ```
 
 **3-7. Dependabot 병합** (`chore(harness): merge dependabot`)
@@ -414,9 +876,10 @@ git commit -m "chore(harness): merge CI workflow (<선택된 옵션>)"
 - 차이점은 commit 메시지 본문에 summary로 기록
 
 없으면 harness 것 유지.
-```
-git add .github/dependabot.yml
-git commit -m "chore(harness): merge dependabot"
+
+```bash
+stage_if_exists .github/dependabot.yml
+commit_if_staged "chore(harness): merge dependabot"
 ```
 
 **3-8. Claude Code hooks 병합** (`chore(harness): merge .claude/settings.json`)
@@ -426,9 +889,9 @@ git commit -m "chore(harness): merge dependabot"
 - **dedup key = `matcher + if + command` 3개 조합**
 - 동일 키면 skip, 다르면 배열에 추가
 
-```
-git add .claude/settings.json
-git commit -m "chore(harness): merge .claude/settings.json"
+```bash
+stage_if_exists .claude/settings.json
+commit_if_staged "chore(harness): merge .claude/settings.json"
 ```
 
 **3-9. package.json / 빌드 매니페스트 scripts 검증** (`chore(harness): add script aliases`)
@@ -448,6 +911,11 @@ lint / typecheck / test / build **4개 모두** 검증:
 Python/Go/Rust 프로젝트면 이 단계는 skip. 대신 validate.sh를 4단계에서
 언어별 명령으로 교체.
 
+```bash
+stage_if_exists package.json
+commit_if_staged "chore(harness): add script aliases"
+```
+
 ## 4. 스택별 커스터마이징 (E 섹션 실행)
 
 이 단계는 3개의 독립 commit으로 나뉨: 4-1 스크립트 커스터마이징,
@@ -455,15 +923,46 @@ Python/Go/Rust 프로젝트면 이 단계는 skip. 대신 validate.sh를 4단계
 
 **4-1. 스크립트 + 규칙 문서 커스터마이징** (`chore(harness): customize for <언어+매니저+러너>`)
 
-**Monorepo 스코프 처리**: D에서 `monorepo: per-package`를 선택했으면:
-- `scripts/`는 루트에 유지 (공통)
-- 그러나 `scripts/validate.sh`의 실행 명령이 각 workspace에서 돌도록
-  수정 (예: pnpm workspace면 `pnpm -r run lint`, turborepo면 `turbo run
-  lint`)
-- 각 패키지 디렉토리에 `docs/agents/` 심볼릭 링크 또는 README 참조로
-  "이 규칙은 repo 루트의 docs/agents/를 따릅니다" 안내 생성 (요청한 경우만)
+**Monorepo 스코프 재확인 (Python multi-pyproject 주의)**:
 
-`monorepo: root-only`를 선택했으면 루트만 처리.
+```bash
+# Python monorepo 감지: apps/*/pyproject.toml 또는 packages/*/pyproject.toml
+PYTHON_MULTI_ROOT=0
+for pattern in "apps/*/pyproject.toml" "packages/*/pyproject.toml" "services/*/pyproject.toml"; do
+  # shellcheck disable=SC2086
+  count=$(ls -1 $pattern 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$count" -gt 1 ]; then
+    PYTHON_MULTI_ROOT=1
+    break
+  fi
+done
+
+if [ "$PYTHON_MULTI_ROOT" = "1" ] && [ "${MONOREPO_SCOPE:-root-only}" = "root-only" ]; then
+  echo "⚠ Python multi-pyproject monorepo 감지 ($count개 pyproject.toml)."
+  echo "  root-only 스코프는 각 패키지 검증을 누락시킵니다."
+  echo "  per-package로 전환할까요? [yes/no]"
+  # 사용자 응답에 따라 MONOREPO_SCOPE 재설정 + session.env 업데이트
+fi
+```
+
+**MONOREPO_SCOPE 값에 따라 처리**:
+
+- `per-package`:
+  - `scripts/`는 루트에 유지 (공통)
+  - `scripts/validate.sh` 명령을 workspace-wide로 수정:
+    - pnpm workspace: `pnpm -r run lint` (`-r`로 모든 workspace 재귀 실행)
+    - yarn workspace: `yarn workspaces foreach run lint`
+    - turborepo: `turbo run lint test build`
+    - nx: `nx run-many -t lint test build`
+    - Python: 각 pyproject.toml 디렉토리 순회하며 `cd <pkg> && <명령>`
+  - 각 패키지 디렉토리에 `HARNESS.md` 생성:
+    ```
+    이 패키지의 코딩·테스트 규칙은 repo 루트의 docs/agents/를 따릅니다.
+    자세한 내용은 <상대경로>/docs/agents/ 참조.
+    ```
+
+- `root-only`:
+  - 루트에서만 명령 실행. workspace 반복 없음.
 
 **기본 커스터마이징 (스코프와 무관)**:
 
@@ -481,9 +980,16 @@ Python/Go/Rust 프로젝트면 이 단계는 skip. 대신 validate.sh를 4단계
 - `docs/agents/deploy-rules.md`에 "## 감지된 배포 타겟" 섹션 추가
   (Dockerfile / vercel.json / fly.toml / netlify.toml / Procfile 등)
 
-```
-git add scripts/validate.sh scripts/validate-quick.sh .claude/hooks/run-checks.sh docs/agents/architecture-rules.md docs/agents/coding-rules.md docs/agents/testing-rules.md docs/agents/deploy-rules.md
-git commit -m "chore(harness): customize for <언어+매니저+러너>"
+```bash
+stage_if_exists \
+  scripts/validate.sh \
+  scripts/validate-quick.sh \
+  .claude/hooks/run-checks.sh \
+  docs/agents/architecture-rules.md \
+  docs/agents/coding-rules.md \
+  docs/agents/testing-rules.md \
+  docs/agents/deploy-rules.md
+commit_if_staged "chore(harness): customize for <언어+매니저+러너>"
 ```
 
 **4-2. 테스트 러너 `--changed` 지원 검증** (`chore(harness): verify test runner performance`)
@@ -518,90 +1024,163 @@ Story 단위 `validate-quick`이 빠르려면 테스트 러너가 "변경 파일
 - "전환"/"플러그인 도입" → 사용자가 수동 진행. 프롬프트는 여기까지.
 - "test skip" → `validate-quick.sh`에서 테스트 단계를 주석 처리하고 이유 기록.
 
-```
-git add scripts/validate-quick.sh   # test skip 선택한 경우만
-git commit -m "chore(harness): verify test runner performance"
+```bash
+stage_if_exists scripts/validate-quick.sh   # test skip 선택한 경우만 변경됨
+commit_if_staged "chore(harness): verify test runner performance"
 ```
 
 **4-3. Docker compose 검증/교정** (`chore(harness): audit docker-compose files`)
 
-기존 `docker-compose*.yml`이 있으면 `docs/agents/docker-rules.md`와
-`deploy-rules.md` 기준으로 검사:
+### 4-3-1. compose 파일 범위 확장 감지
+
+```bash
+COMPOSE_FILES=()
+for pat in "docker-compose.yml" "docker-compose.yaml" "docker-compose.*.yml" \
+           "docker-compose.*.yaml" "compose.yml" "compose.yaml" \
+           "compose.*.yml" "compose.*.yaml"; do
+  # shellcheck disable=SC2086
+  for f in $pat; do
+    [ -e "$f" ] && COMPOSE_FILES+=("$f")
+  done
+done
+
+if [ ${#COMPOSE_FILES[@]} -eq 0 ]; then
+  echo "[4-3] compose 파일 없음 — skip"
+  # 전체 4-3 단계 skip
+fi
+```
+
+### 4-3-2. 환경 판정 (수정 전 필수 — 이거 없이는 어떤 수정도 금지)
+
+`docker-compose.yml`만 있고 `.dev.yml`이 없는 프로젝트가 많고, 파일명만으론
+운영/개발 판단 불가. **환경 확인 전에는 포트 주석 처리·external 볼륨
+전환·container rename·name 접미사 결정 모두 금지**.
+
+```bash
+echo "감지된 compose 파일:"
+for f in "${COMPOSE_FILES[@]}"; do
+  # 기존 name과 x-environment 라벨이 있으면 추정값 제시
+  existing_name=$(grep -m1 -E '^name:' "$f" 2>/dev/null | sed 's/^name:[[:space:]]*//' || true)
+  existing_env=$(grep -m1 -E '^x-environment:' "$f" 2>/dev/null | sed 's/^x-environment:[[:space:]]*//' || true)
+
+  hint=""
+  case "$f" in
+    *dev*|*develop*) hint=" (파일명 힌트: development)" ;;
+    *stag*)          hint=" (파일명 힌트: staging)" ;;
+    *prod*)          hint=" (파일명 힌트: production)" ;;
+  esac
+
+  echo "  - $f: name='${existing_name:-없음}' x-environment='${existing_env:-없음}'$hint"
+done
+
+cat <<'PROMPT'
+
+각 파일의 환경 의도를 확인해 주세요 (development / staging / production):
+
+응답 형식 예:
+  docker-compose.yml: production
+  docker-compose.dev.yml: development
+
+환경 확인 전에는 어떤 수정도 수행하지 않습니다.
+PROMPT
+
+# 사용자 응답을 session.env에 저장 — COMPOSE_ENV_<파일명>=<환경>
+# 파일명에 슬래시·점이 있으면 sanitize (예: docker-compose.yml → docker_compose_yml)
+```
+
+### 4-3-3. 환경 확정 후 검사 (환경 매핑이 완성된 파일에만)
 
 검사 항목:
-1. `name:` 필드 존재 여부 + 환경 접미사 (`-dev` / `-staging`)
-2. `x-environment:` 라벨 존재 (값: `production`/`development`/`staging`)
-3. 컨테이너명이 `<접두사>-<역할>` 패턴 준수, 금지 패턴(`-1`, `-new`,
-   `_backend` 등) 부재
+1. `name:` 필드 존재 여부 + 환경 접미사 (development면 `-dev`, staging이면 `-staging`, production은 접미사 없음)
+2. `x-environment:` 라벨 존재 + 사용자 확인 환경과 일치
+3. 컨테이너명 `<접두사>-<역할>` 패턴 준수, 금지 패턴(`-1`, `-new`, `_backend` 등) 부재
 4. 볼륨 `external: true` + `name:` 명시 (DB 볼륨인 경우)
-5. Backend/DB/Redis의 호스트 포트 바인딩이 주석 처리됐는지 (운영)
+5. Backend/DB/Redis 호스트 포트 바인딩이 주석 처리됐는지 (**production만**)
 6. `restart: unless-stopped` 또는 `restart: always` 명시
 
-위반 감지 시:
-```
-⚠ docker-compose 위반 감지:
-  - docker-compose.yml: name 필드 없음, x-environment 라벨 없음
-  - 컨테이너 'web-backend-1': 숫자 suffix 금지 패턴 (docker-rules §1-3 위배)
-  - DB 볼륨 'postgres_data': external 선언 없음 (재생성 시 데이터 유실 위험)
+`development` 환경은 5번(포트 공개)을 위반으로 보지 않음 — 개발에는 포트
+공개가 정상.
 
-  수정할까요? (각 항목 수락/거부 가능)
-```
+### 4-3-4. 위험도별 수정 분류 (환경 확정된 파일만 대상)
 
-**위험도별 수정 분류** — 사용자에게 각 그룹별로 승인 받기:
-
-**🟢 안전 수정 (즉시 적용 가능, 실행 중 container 영향 없음)**:
-- `name:` 필드 없으면 추가 (예: `name: <디렉토리명>`, 운영이면 접미사
-  없음, 개발이면 `-dev`)
-- `x-environment:` 라벨 추가
-- `restart:` 정책 추가
+**🟢 안전 수정 (즉시 적용 가능)**:
+- `name:` 필드 누락 → 추가 (환경에 맞춘 접미사 포함)
+- `x-environment:` 라벨 누락 → 추가
+- `restart:` 정책 누락 → 추가
 
 **🟡 중간 위험 (재배포 시 container 재생성 필요)**:
-- 볼륨 `external: true` + `name:` 명시 추가 — **기존 볼륨이 있으면 이
-  조치 전에 `docker volume create --name <기존-이름>`로 external 볼륨으로
-  전환 필요**. AI는 기존 볼륨 이름 확인 + 전환 명령을 사용자에게 제시만
-  하고 실행은 사용자 승인 후 진행.
-- Backend/DB/Redis 호스트 포트 바인딩 주석 처리 — 로컬 접근 도구(DBeaver
-  등)가 끊김. 사용자에게 확인.
+- 볼륨 `external: true` + `name:` 명시 추가 — **기존 볼륨 있으면 이
+  조치 전에 `docker volume create --name <기존 이름>`으로 external 볼륨
+  전환 필요**. AI는 전환 명령만 사용자에게 제시, 실행은 사용자 승인 후.
+- **production에서만** Backend/DB/Redis 호스트 포트 주석 처리 — 로컬
+  DB 클라이언트(DBeaver 등) 접근 차단. 사용자 재확인.
 
-**🔴 고위험 (데이터 유실 또는 서비스 중단 가능)**:
-- **컨테이너 이름 rename은 자동 수행 금지**. 기존 실행 중 container를
-  참조하는 외부 시스템(monitoring, scripts)을 깨뜨림. 대안:
+**🔴 고위험 (자동 변경 절대 금지)**:
+- 컨테이너명 rename. 외부 모니터링·nginx proxy·스크립트가 기존 이름을
+  참조 중일 수 있음. 아래 안내만 출력:
   ```
-  ⚠ 컨테이너명 'web-backend-1'이 금지 패턴 위반.
-    자동 rename은 데이터 유실 위험이 있어 수행하지 않습니다.
-    권장 절차 (수동):
-    1. 현재 container 중지: docker compose stop
-    2. compose 파일에서 container_name을 'web-backend'로 수정
-    3. 외부 참조(monitoring, nginx proxy) 업데이트
-    4. docker compose up -d
-    5. 데이터 확인 후 기존 container 제거: docker rm web-backend-1
+  ⚠ 컨테이너명 '<기존>'이 금지 패턴 위반.
+    자동 rename은 데이터 유실 + 외부 참조 붕괴 위험이 있어 수행하지
+    않습니다. 수동 절차:
+      1. docker compose stop
+      2. compose 파일에서 container_name 수정
+      3. 외부 참조(monitoring, nginx proxy) 업데이트
+      4. docker compose up -d
+      5. 데이터 검증 후 기존 container 제거
   ```
 
-사용자 승인 받은 항목만 수정. 원본은 `docs/legacy/docker-compose.yml.${TIMESTAMP}.bak`
-백업.
+### 4-3-5. 실행
 
-```
-git add docker-compose*.yml docs/legacy/
-git commit -m "chore(harness): audit docker-compose files (safe-only)"
-```
+각 위반 항목마다 사용자에게 개별 수락/거부 확인. 승인된 항목만 수정.
+원본은 수정 전 반드시 백업:
 
-(docker-compose 파일이 없으면 4-3 단계 skip)
+```bash
+for f in "${COMPOSE_FILES[@]}"; do
+  # 환경이 확정된 파일에 대해서만 수정 진행
+  # 실제 수정은 AI가 사용자 승인 받은 항목만 yq 또는 수동 편집
+  backup_to_legacy "$f"
+done
+
+stage_if_exists "${COMPOSE_FILES[@]}"
+# docs/legacy/ 아래 새 백업 파일들도 스테이징
+find docs/legacy -name "*.${TIMESTAMP}.bak" -print0 \
+  | xargs -0 -r git add --
+commit_if_staged "chore(harness): audit docker-compose files (safe-only, env-verified)"
+```
 
 ## 5. 검증 (`chore(harness): verify integration`)
 
-```
-./scripts/validate.sh
-```
+```bash
+cd "$(git rev-parse --show-toplevel)"
+. state/harness-integration/session.env
+. state/harness-integration/helpers.sh
 
-실패하면 원인 로그 분석 후 수정 → 재시도. **최대 3회 시도 후 중단**하고
-사용자에게 실패 내용 보고. 무한 루프 금지.
+attempt=0
+MAX_ATTEMPTS=3
+while [ $attempt -lt $MAX_ATTEMPTS ]; do
+  attempt=$((attempt + 1))
+  echo "[5] validate.sh 시도 $attempt/$MAX_ATTEMPTS"
+  if ./scripts/validate.sh; then
+    echo "[5] 검증 통과"
+    break
+  fi
+  if [ $attempt -ge $MAX_ATTEMPTS ]; then
+    echo "STOP [5]: validate.sh가 $MAX_ATTEMPTS회 실패."
+    echo "  로그 확인: state/validate/latest/*.log"
+    echo "  수동 수정 후 이 단계부터 재실행 가능."
+    exit 1
+  fi
+  # 실패 원인을 AI가 분석해 수정 (스크립트 명령 오타, alias 누락 등).
+  # 변경 후 다음 루프 iteration에서 재시도.
+done
 
-성공하면:
+stage_if_exists \
+  scripts/validate.sh scripts/validate-quick.sh \
+  scripts/smoke.sh \
+  .claude/hooks/run-checks.sh \
+  package.json
+commit_if_staged "chore(harness): verify integration"
 ```
-git add -A
-git commit -m "chore(harness): verify integration"
-```
-(변경이 없으면 이 commit은 생략)
 
 ## 6. git hooks 활성화
 
@@ -613,20 +1192,35 @@ D에서 husky 옵션 A 선택했으면:
 
 ## 7. GitHub 보안 설정 (조건부)
 
-```
-gh auth status
-```
+`gh auth status`가 **미인증 시 non-zero**로 종료되므로 `set -e` 아래에서
+그대로 호출하면 스크립트가 멈춥니다. 반드시 `if ... then ... else` 가드
+사용:
 
-- 인증됨 + origin 있음 + `D의 CI rename=yes`:
-  ```
-  ./scripts/setup/setup-repo.sh
-  ```
-  (CI rename 때문에 branch protection의 required status checks 업데이트
-  필요)
-- 인증됨 + origin 있음 + CI rename=no: `setup-repo.sh` 실행 (신규 보안
-  설정 목적)
-- 인증 안 됨: skip하고 "gh auth login 후 `./scripts/setup/setup-repo.sh`
-  수동 실행 필요"로 안내.
+```bash
+cd "$(git rev-parse --show-toplevel)"
+. state/harness-integration/session.env
+
+HAS_ORIGIN=0
+git remote get-url origin >/dev/null 2>&1 && HAS_ORIGIN=1
+
+if gh auth status >/dev/null 2>&1; then
+  if [ "$HAS_ORIGIN" = "1" ]; then
+    # CI rename yes였다면 branch protection required checks 갱신 필수
+    ./scripts/setup/setup-repo.sh
+    echo "[7] setup-repo.sh 완료"
+    if [ "${CI_RENAME:-no}" = "yes" ]; then
+      echo "ℹ CI rename이 적용됐습니다. setup-repo.sh가 required checks를"
+      echo "  'quality-gate' 등 새 이름으로 재등록했는지 GitHub UI에서 확인하세요."
+    fi
+  else
+    echo "[7] origin 미설정 — setup-repo.sh skip"
+    echo "  나중에: git remote add origin <url> 후 ./scripts/setup/setup-repo.sh"
+  fi
+else
+  echo "[7] gh 인증 없음 — setup-repo.sh skip"
+  echo "  나중에: gh auth login 후 ./scripts/setup/setup-repo.sh"
+fi
+```
 
 ## 8. 최종 푸시
 
@@ -675,6 +1269,13 @@ git push
 - 전체 되돌리기: git reset --hard <통합 전 SHA>
 - 특정 단계만: git revert <해당 commit SHA>
 - 원본 복구: docs/legacy/ 안의 .${TIMESTAMP}.bak 파일 참조
+
+### 정리 안내 (사용자 직접 실행)
+- 0-3에서 git stash를 선택했으면: `git stash pop` (충돌 시 해결)
+- 세션 상태 파일 제거 (재실행 시 새 TIMESTAMP 생성 위해):
+  ```
+  rm -rf state/harness-integration/
+  ```
 ```
 
 ## A~E 섹션 ↔ 실행 단계 매핑
