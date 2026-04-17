@@ -7,10 +7,24 @@
 
 ## 셋업 순서
 
-### 1단계: 이 레파지토리를 프로젝트에 복사
+### 1단계: 필수 파일 설치 (권장)
 
-프로젝트 시작 전 이 레파지토리 전체를 복사하여 붙여넣습니다.
-BMAD와 하네스 파일이 모두 포함되어 있습니다.
+target 프로젝트 루트에서 **install 스크립트로 필수 파일만** 가져옵니다. BMAD 스킬·changelog 등 template 전용 파일은 자동 제외되어 타 프로젝트 소스코드와의 충돌 위험이 없습니다.
+
+```bash
+# target 프로젝트 디렉토리에서 실행
+curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.sh | bash
+
+# 먼저 무엇을 설치할지 확인하고 싶다면
+curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.sh -o install.sh
+bash install.sh --dry-run
+bash install.sh             # 실제 설치 (기존 파일은 skip)
+bash install.sh --force     # 기존 파일 덮어쓰기
+```
+
+이 방식은 약 **250개 필수 파일**만 복사합니다 (전체 clone은 ~2,400개).
+
+> **전체 clone 대안**: 이 저장소를 `git clone`해도 됩니다. 그 경우 `.agents/skills`, `.claude/skills`, `docs/changelog/` 등 template 전용 파일까지 모두 들어옵니다. 대부분은 불필요하므로 install.sh 사용을 권장합니다.
 
 > 하네스 초기화(git hooks, GitHub Secret Scanning, Branch Protection)는
 > **4단계 프로젝트 초기화 프롬프트에서 Claude Code가 자동 실행**합니다.
@@ -407,6 +421,7 @@ AI에게 Docker 또는 DB 마이그레이션 작업을 시키실 때는 **환경
 │   └── adr.md                         ADR 템플릿
 │
 ├── scripts/
+│   ├── install.sh                     다른 프로젝트로 필수 파일만 install (tarball 기반)
 │   ├── lib/
 │   │   ├── validate-utils.sh          검증 공용 헬퍼 (래퍼, 로그, summary/verbose)
 │   │   └── powershell-utils.ps1       PowerShell용 Git Bash 호출 (WSL opt-in)
