@@ -1,0 +1,57 @@
+# .github/workflows/dependabot-auto-merge.yml
+#
+# Dependabot PR 자동 approve + auto-merge.
+# patch/minor만 자동 병합, major는 수동 리뷰 대기.
+#
+# 안전장치: branch protection의 required status checks
+# (quality-gate, gitleaks, codeql, trivy-deps)가 모두 통과해야만 실제 병합됨.
+# 즉 이 workflow는 "통과 시 자동 승인"일 뿐, CI 실패 시 자동으로 차단됨.
+
+name: Dependabot Auto-Merge
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve patch & minor updates
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr review --approve "$PR_URL" --body "Auto-approved by Dependabot auto-merge workflow (patch/minor update)."
+
+      - name: Enable auto-merge for patch & minor
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge --auto --squash "$PR_URL"
+
+      - name: Comment on major updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "$PR_URL" --body "⚠ **Major version update detected** — 자동 병합 제외. breaking change 여부를 수동 검토한 뒤 approve 해주세요."
