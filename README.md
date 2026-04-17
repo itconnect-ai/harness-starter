@@ -3,6 +3,9 @@
 이 키트는 **Codex Desktop(구현) + Claude Code(리뷰)** 조합으로
 100% AI 개발을 수행하기 위한 harness engineering 스타터 템플릿입니다.
 
+> **기존 프로젝트에 입히는 방법**은 [README-brownfield.md](README-brownfield.md)를 참고하세요.
+> 이 README는 신규(greenfield) 프로젝트를 기준으로 작성되었습니다.
+
 ---
 
 ## 셋업 순서

@@ -61,6 +61,7 @@ ESSENTIAL_PATHS=(
   "CLAUDE.md"
   "AGENTS.md"
   "REVIEW.md"
+  "README-brownfield.md"
   # Git·GitHub 설정
   ".gitattributes"
   ".gitleaks.toml"
