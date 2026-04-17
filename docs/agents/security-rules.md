@@ -33,3 +33,41 @@
 - 클라이언트에는 일반적 에러 메시지 + 에러 코드만 반환
 - 상세 에러는 서버 로그에만 기록
 - 패턴: `catch(err) { logger.error(err); res.status(500).json({ error: 'Internal server error' }) }`
+
+## 자동 보안 검증 체계
+
+이 프로젝트는 5단계 자동 보안 검증을 적용합니다:
+
+| 단계 | 트리거 | 도구 | 검사 대상 |
+|---|---|---|---|
+| 1. 커밋 직전 | `git commit` | `.githooks/pre-commit` | staged 파일의 `.env` 차단 + eslint |
+| 2. push/PR | main/develop 대상 | `.github/workflows/security.yml` | Gitleaks(히스토리 전체 시크릿), CodeQL(SAST), Trivy(의존성+Docker 이미지 CVE) |
+| 3. Docker 명령 실행 시 | Claude Bash | `.claude/hooks/docker-guard-hook.sh` | `docker compose down -v`, `prisma migrate deploy` 직접 호출 차단 |
+| 4. 마이그레이션 실행 시 | `db-migrate.sh` | 내장 래퍼 | 환경 검증 + 자동 pg_dump + 실패 시 복원 안내 |
+| 5. 주간 스케줄 | 월요일 09:00 KST | security.yml | 위 2단계 재실행 (새로 발견된 CVE 감지) |
+
+### Branch Protection (setup-repo.sh가 설정)
+
+- main/develop 병합 조건: CI(`quality-gate`) + Security(`gitleaks`, `codeql`) 모두 통과
+- PR 리뷰 최소 1명 + force push/delete 차단
+- stale review dismissed: 새 커밋이 push되면 기존 승인 무효
+
+### Dependabot (주간 자동 PR)
+
+- npm / GitHub Actions / Docker 3개 ecosystem, 매주 월요일 09:00 KST
+- patch/minor는 `.github/workflows/dependabot-auto-merge.yml`이 자동 승인 + merge
+- major는 수동 리뷰 대기 (자동 comment로 알림)
+
+### 새 프로젝트 복사 후 1회 실행 필요
+
+```bash
+./scripts/setup/install-git-hooks.sh   # 커밋 hook 활성화
+./scripts/setup/setup-repo.sh          # GitHub secret scanning + branch protection
+```
+
+### 미도입 기능 (`docs/future-upgrades/` 참조)
+
+- OIDC 클라우드 배포 인증 (클라우드 도입 시)
+- DAST — OWASP ZAP (외부 공개 웹 앱 시)
+- OpenTelemetry 관측성 (운영 규모 커지면)
+- OpenSSF Scorecard (오픈소스 공개 시)

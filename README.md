@@ -24,17 +24,23 @@ Phase B: Claude Code (품질 보장, Epic 단위)
 프로젝트 시작 전 이 레파지토리 전체를 복사하여 붙여넣습니다.
 BMAD와 하네스 파일이 모두 포함되어 있습니다.
 
-복사 직후 **git hooks를 1회 활성화**하세요 (husky 등 npm 의존 불필요):
+복사 직후 **아래 2개를 1회 실행**하세요:
 
 ```bash
-# bash / WSL / macOS / Linux
-./scripts/setup/install-git-hooks.sh
+# 1) 커밋 hook 활성화 (husky 등 npm 의존 불필요)
+./scripts/setup/install-git-hooks.sh     # bash / WSL / macOS / Linux
+./scripts/setup/install-git-hooks.ps1    # Windows PowerShell
 
-# Windows PowerShell
-./scripts/setup/install-git-hooks.ps1
+# 2) GitHub repo 보안 설정 (gh CLI 필요)
+#    Secret Scanning + Push Protection + main/develop branch protection
+./scripts/setup/setup-repo.sh --dry-run   # 먼저 확인
+./scripts/setup/setup-repo.sh             # 실제 적용
 ```
 
-이후 `git commit` 시 자동으로 lint + conventional commit 형식이 검증됩니다.
+이후 자동으로:
+- `git commit` 시 lint + conventional commit 검증
+- `git push` 시 GitHub Secret Scanning이 하드코딩된 키 차단
+- main/develop 대상 PR은 CI + Gitleaks + CodeQL 통과해야만 merge 가능
 
 ### 2단계: BMAD 설치
 
@@ -392,6 +398,7 @@ AI에게 Docker 또는 DB 마이그레이션 작업을 시키실 때는 **환경
 │   │   ├── feedback-rules.md          과거 실수 패턴 활성 교훈
 │   │   └── seo-rules.md              SEO/AEO/GEO 구현 규칙
 │   ├── changelog/                     하네스 개선 이력 (비개발자 요약 포함)
+│   ├── future-upgrades/               미도입 기능 도입 가이드 (OIDC/OTel/ZAP/Scorecard)
 │   ├── checklists/
 │   │   ├── page-update.md             페이지 수정 후 SEO/AEO/GEO 체크리스트
 │   │   └── pre-deploy.md              배포 전 체크리스트
@@ -411,7 +418,9 @@ AI에게 Docker 또는 DB 마이그레이션 작업을 시키실 때는 **환경
 │   │   └── powershell-utils.ps1       PowerShell용 Git Bash 호출 (WSL opt-in)
 │   ├── setup/
 │   │   ├── install-git-hooks.sh       .githooks/ 활성화 (복사 후 1회 실행)
-│   │   └── install-git-hooks.ps1      Windows 버전
+│   │   ├── install-git-hooks.ps1      Windows 버전
+│   │   ├── setup-repo.sh              GitHub repo 보안 설정 자동화 (gh CLI 필요)
+│   │   └── setup-repo.ps1             Windows 버전
 │   ├── run-epic.sh                    CLI fallback (Codex Desktop 없을 때)
 │   ├── validate-quick.sh              bash/WSL/macOS/Linux Story 빠른 검증
 │   ├── validate-quick.ps1             Windows PowerShell Story 빠른 검증
@@ -506,7 +515,11 @@ AI에게 Docker 또는 DB 마이그레이션 작업을 시키실 때는 **환경
 | Harness | 트리거 | 설명 |
 |---|---|---|
 | `.github/workflows/ci.yml` | main/develop에 PR 생성 또는 push 시 | lint → typecheck → test → build → coverage → audit → docker build 검증 |
+| `.github/workflows/security.yml` | main/develop push/PR + 주간 월요일 09:00 KST | Gitleaks(시크릿) + CodeQL(SAST) + Trivy(의존성/Docker 이미지 CVE) |
+| `.github/workflows/release.yml` | `v*.*.*` 태그 push 시 | CI 재검증 → GitHub Release 자동 생성 (changelog 포함) |
 | `.github/workflows/deploy.yml` | main push + CI 성공 직후 | SSH로 사내 Docker 서버 접속 → git pull + docker compose up (+ 옵션 pre-backup/post-smoke) |
+| `.github/workflows/dependabot-auto-merge.yml` | Dependabot이 PR 오픈 시 | patch/minor만 자동 approve + merge. major는 수동 대기 |
+| `.github/dependabot.yml` | 매주 월요일 09:00 KST | npm/github-actions/docker 3개 ecosystem 주간 업데이트 PR 자동 생성 |
 
 ### 규칙 파일 (에이전트가 자동 참조)
 
