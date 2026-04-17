@@ -117,7 +117,7 @@ jobs:
 
       - name: Build image (scan target)
         if: steps.check.outputs.found == 'true'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
