@@ -1,19 +1,7 @@
 # Harness Engineering Starter Kit
-# BMAD + Claude Code + Codex Desktop 통합 운영 구조
-
-## 개요
 
 이 키트는 **Codex Desktop(구현) + Claude Code(리뷰)** 조합으로
 100% AI 개발을 수행하기 위한 harness engineering 스타터 템플릿입니다.
-
-```
-기획/설계: Claude Code + BMAD Framework
-Phase A: Codex Desktop (구현, Epic 단위)
-  story마다: bmad-create-story → bmad-dev-story → validate-quick
-  Epic 완료 후: validate (전체 통합 검증)
-Phase B: Claude Code (품질 보장, Epic 단위)
-  bmad-code-review → 오류 직접 수정 → 테스트 보강
-```
 
 ---
 
@@ -24,23 +12,11 @@ Phase B: Claude Code (품질 보장, Epic 단위)
 프로젝트 시작 전 이 레파지토리 전체를 복사하여 붙여넣습니다.
 BMAD와 하네스 파일이 모두 포함되어 있습니다.
 
-복사 직후 **아래 2개를 1회 실행**하세요:
-
-```bash
-# 1) 커밋 hook 활성화 (husky 등 npm 의존 불필요)
-./scripts/setup/install-git-hooks.sh     # bash / WSL / macOS / Linux
-./scripts/setup/install-git-hooks.ps1    # Windows PowerShell
-
-# 2) GitHub repo 보안 설정 (gh CLI 필요)
-#    Secret Scanning + Push Protection + main/develop branch protection
-./scripts/setup/setup-repo.sh --dry-run   # 먼저 확인
-./scripts/setup/setup-repo.sh             # 실제 적용
-```
-
-이후 자동으로:
-- `git commit` 시 lint + conventional commit 검증
-- `git push` 시 GitHub Secret Scanning이 하드코딩된 키 차단
-- main/develop 대상 PR은 CI + Gitleaks + CodeQL 통과해야만 merge 가능
+> 하네스 초기화(git hooks, GitHub Secret Scanning, Branch Protection)는
+> **4단계 프로젝트 초기화 프롬프트에서 Claude Code가 자동 실행**합니다.
+> 수동 설정은 필요 없습니다.
+>
+> 수동 실행이 필요한 경우만: `./scripts/setup/init-harness.sh` (또는 `.ps1`)
 
 ### 2단계: BMAD 설치
 
@@ -66,6 +42,24 @@ npx bmad-method install
 참고 파일:
 - _bmad-output/planning-artifacts/PRD.md
 - _bmad-output/planning-artifacts/architecture.md
+
+## 0단계: 하네스 자동 초기화 (최초 1회만)
+아래 스크립트를 먼저 실행해 git hooks, GitHub Secret Scanning, Branch
+Protection을 자동 설정해줘. 여러 번 실행해도 안전(멱등성 보장).
+- bash/WSL/macOS/Linux: `./scripts/setup/init-harness.sh`
+- Windows PowerShell: `./scripts/setup/init-harness.ps1`
+
+이 스크립트가 내부적으로 순차 실행하는 것:
+  1) ./scripts/setup/install-git-hooks.sh
+     (pre-commit, commit-msg 활성화 — core.hooksPath 방식)
+  2) ./scripts/setup/setup-repo.sh
+     (gh CLI 있고 origin 설정된 경우에만 자동 실행.
+      없으면 skip + 추후 수동 실행 안내 출력)
+
+이후 자동으로 적용되는 것:
+- git commit 시 lint + Conventional Commits 형식 검증
+- git push 시 GitHub Secret Scanning이 하드코딩 키 차단
+- main/develop 대상 PR은 CI + Gitleaks + CodeQL 통과해야만 merge 가능
 
 ## 1단계: 프로젝트 초기화
 architecture.md의 기술 스택에 맞게 프로젝트를 초기화해줘.
@@ -417,9 +411,11 @@ AI에게 Docker 또는 DB 마이그레이션 작업을 시키실 때는 **환경
 │   │   ├── validate-utils.sh          검증 공용 헬퍼 (래퍼, 로그, summary/verbose)
 │   │   └── powershell-utils.ps1       PowerShell용 Git Bash 호출 (WSL opt-in)
 │   ├── setup/
-│   │   ├── install-git-hooks.sh       .githooks/ 활성화 (복사 후 1회 실행)
+│   │   ├── init-harness.sh            하네스 자동 초기화 통합 (4단계 프롬프트에서 호출)
+│   │   ├── init-harness.ps1           Windows 버전
+│   │   ├── install-git-hooks.sh       .githooks/ 활성화 (init-harness가 호출)
 │   │   ├── install-git-hooks.ps1      Windows 버전
-│   │   ├── setup-repo.sh              GitHub repo 보안 설정 자동화 (gh CLI 필요)
+│   │   ├── setup-repo.sh              GitHub repo 보안 설정 (init-harness가 호출, gh CLI 필요)
 │   │   └── setup-repo.ps1             Windows 버전
 │   ├── run-epic.sh                    CLI fallback (Codex Desktop 없을 때)
 │   ├── validate-quick.sh              bash/WSL/macOS/Linux Story 빠른 검증
