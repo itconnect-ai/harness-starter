@@ -20,6 +20,15 @@ iwr https://raw.githubusercontent.com/itconnect-ai/harness-starter/main/scripts/
 
 기본 모드는 기존 파일 skip — 충돌 없이 안전.
 
+> **CodeQL 언어 자동 감지**: install 스크립트는 프로젝트 루트의 마커 파일
+> (`package.json`, `pyproject.toml`, `go.mod`, `pom.xml`, `*.csproj`, `Gemfile`,
+> `Package.swift` 등)을 보고 `.github/workflows/security.yml`의 `language:`
+> matrix를 자동 갱신합니다. 출력 마지막의 `CodeQL:` 라인을 확인하세요.
+> 모노레포처럼 마커가 하위 디렉토리에 있거나 혼합 스택이면
+> [.github/workflows/security.yml](.github/workflows/security.yml)의
+> `matrix.language`를 직접 조정하세요. CodeQL 지원 언어:
+> `actions, c-cpp, csharp, go, java-kotlin, javascript-typescript, python, ruby, swift`.
+
 ---
 
 ## 2단계: Claude Code에 통합 프롬프트 붙여넣기

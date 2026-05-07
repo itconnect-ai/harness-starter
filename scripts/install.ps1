@@ -156,6 +156,58 @@ try {
     }
   }
 
+  # CodeQL 언어 감지 + security.yml 갱신
+  # 기본 [javascript-typescript]은 JS/TS가 아닌 프로젝트에서 SAST가 무의미함.
+  # 마커 파일로 언어를 감지해 matrix를 자동 갱신. 사용자가 이미 커스터마이징한
+  # 경우(라인이 기본값과 다름)는 손대지 않음.
+  $langDetectNote = ""
+  $securityYml = Join-Path $targetRoot ".github/workflows/security.yml"
+  if (-not $DryRun -and (Test-Path -LiteralPath $securityYml)) {
+    $detected = New-Object System.Collections.Generic.List[string]
+
+    if (Test-Path -LiteralPath (Join-Path $targetRoot "package.json")) {
+      $detected.Add("javascript-typescript") | Out-Null
+    }
+    $pythonMarkers = @("pyproject.toml", "setup.py", "requirements.txt", "Pipfile")
+    foreach ($m in $pythonMarkers) {
+      if (Test-Path -LiteralPath (Join-Path $targetRoot $m)) {
+        if (-not $detected.Contains("python")) { $detected.Add("python") | Out-Null }
+        break
+      }
+    }
+    if (Test-Path -LiteralPath (Join-Path $targetRoot "go.mod")) {
+      $detected.Add("go") | Out-Null
+    }
+    $hasGradle = (Test-Path -LiteralPath (Join-Path $targetRoot "pom.xml")) -or
+                 (@(Get-ChildItem -LiteralPath $targetRoot -Filter "*.gradle" -ErrorAction SilentlyContinue).Count -gt 0) -or
+                 (@(Get-ChildItem -LiteralPath $targetRoot -Filter "*.gradle.kts" -ErrorAction SilentlyContinue).Count -gt 0)
+    if ($hasGradle) { $detected.Add("java-kotlin") | Out-Null }
+    $hasDotnet = (@(Get-ChildItem -LiteralPath $targetRoot -Filter "*.csproj" -ErrorAction SilentlyContinue).Count -gt 0) -or
+                 (@(Get-ChildItem -LiteralPath $targetRoot -Filter "*.sln" -ErrorAction SilentlyContinue).Count -gt 0)
+    if ($hasDotnet) { $detected.Add("csharp") | Out-Null }
+    if (Test-Path -LiteralPath (Join-Path $targetRoot "Gemfile")) {
+      $detected.Add("ruby") | Out-Null
+    }
+    if (Test-Path -LiteralPath (Join-Path $targetRoot "Package.swift")) {
+      $detected.Add("swift") | Out-Null
+    }
+
+    if ($detected.Count -gt 0) {
+      $matrixCsv = ($detected -join ", ")
+      $content = Get-Content -LiteralPath $securityYml -Raw
+      $defaultPattern = "(?m)^(\s*)language:\s*\[javascript-typescript\]\s*$"
+      if ($content -match $defaultPattern) {
+        $newContent = [regex]::Replace($content, $defaultPattern, "`${1}language: [$matrixCsv]")
+        Set-Content -LiteralPath $securityYml -Value $newContent -NoNewline -Encoding UTF8
+        $langDetectNote = "감지된 CodeQL 언어 -> matrix [$matrixCsv] 적용"
+      } else {
+        $langDetectNote = "security.yml language matrix 사용자 커스터마이징 감지 -> 보존 (감지: [$matrixCsv])"
+      }
+    } else {
+      $langDetectNote = "언어 마커 파일 미감지 -> security.yml [javascript-typescript] 기본값 유지 (수동 조정 필요할 수 있음)"
+    }
+  }
+
   Write-Host ""
   Write-Host "=============================================="
   Write-Host " 완료"
@@ -164,6 +216,9 @@ try {
   Write-Host "  overwrote:         $overwrote"
   Write-Host "  skipped (exists):  $skippedExists"
   Write-Host "  skipped (missing): $skippedMissing"
+  if ($langDetectNote -ne "") {
+    Write-Host "  CodeQL: $langDetectNote"
+  }
   Write-Host ""
 
   if ($DryRun) {

@@ -221,6 +221,55 @@ if [ "$DRY_RUN" = false ] && [ "$COPIED" -gt 0 ]; then
   find "$TARGET/.githooks" -type f -exec chmod +x {} \; 2>/dev/null || true
 fi
 
+# ── CodeQL 언어 감지 + security.yml 갱신 ──
+# 기본 [javascript-typescript]은 JS/TS가 아닌 프로젝트에서 SAST가 무의미함.
+# 마커 파일로 언어를 감지해 matrix를 자동 갱신. 사용자가 이미 커스터마이징한
+# 경우(라인이 기본값과 다름)는 손대지 않음.
+SEC_YML="$TARGET/.github/workflows/security.yml"
+LANG_DETECT_NOTE=""
+if [ "$DRY_RUN" = false ] && [ -f "$SEC_YML" ]; then
+  detected_langs=""
+  add_lang() {
+    if [ -z "$detected_langs" ]; then
+      detected_langs="$1"
+    else
+      case ",$detected_langs," in
+        *",$1,"*) ;;
+        *) detected_langs="$detected_langs,$1" ;;
+      esac
+    fi
+  }
+
+  [ -f "$TARGET/package.json" ] && add_lang "javascript-typescript"
+  if [ -f "$TARGET/pyproject.toml" ] || [ -f "$TARGET/setup.py" ] || \
+     [ -f "$TARGET/requirements.txt" ] || [ -f "$TARGET/Pipfile" ]; then
+    add_lang "python"
+  fi
+  [ -f "$TARGET/go.mod" ] && add_lang "go"
+  if [ -f "$TARGET/pom.xml" ] || ls "$TARGET"/*.gradle "$TARGET"/*.gradle.kts >/dev/null 2>&1; then
+    add_lang "java-kotlin"
+  fi
+  if ls "$TARGET"/*.csproj "$TARGET"/*.sln >/dev/null 2>&1; then
+    add_lang "csharp"
+  fi
+  [ -f "$TARGET/Gemfile" ] && add_lang "ruby"
+  [ -f "$TARGET/Package.swift" ] && add_lang "swift"
+
+  if [ -n "$detected_langs" ]; then
+    matrix_csv=$(echo "$detected_langs" | sed 's/,/, /g')
+    if grep -q '^[[:space:]]*language: \[javascript-typescript\][[:space:]]*$' "$SEC_YML"; then
+      tmp_yml="$SEC_YML.tmp.$$"
+      sed "s|^\([[:space:]]*\)language: \[javascript-typescript\][[:space:]]*$|\1language: [$matrix_csv]|" \
+        "$SEC_YML" > "$tmp_yml" && mv "$tmp_yml" "$SEC_YML"
+      LANG_DETECT_NOTE="감지된 CodeQL 언어 → matrix [$matrix_csv] 적용"
+    else
+      LANG_DETECT_NOTE="security.yml language matrix 사용자 커스터마이징 감지 → 보존 (감지: [$matrix_csv])"
+    fi
+  else
+    LANG_DETECT_NOTE="언어 마커 파일 미감지 → security.yml [javascript-typescript] 기본값 유지 (수동 조정 필요할 수 있음)"
+  fi
+fi
+
 # ── 요약 ──
 echo ""
 echo "=============================================="
@@ -230,6 +279,9 @@ echo "  copied:            $COPIED"
 echo "  overwrote:         $OVERWROTE"
 echo "  skipped (exists):  $SKIPPED_EXISTS"
 echo "  skipped (missing): $SKIPPED_MISSING"
+if [ -n "$LANG_DETECT_NOTE" ]; then
+  echo "  CodeQL: $LANG_DETECT_NOTE"
+fi
 echo ""
 
 if [ "$DRY_RUN" = true ]; then

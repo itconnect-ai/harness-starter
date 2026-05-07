@@ -219,6 +219,14 @@ git commit -m "chore(harness): install base files"
 
 실패 시 STOP + 네트워크·저장소 URL 확인 안내.
 
+install.sh 실행 마지막에 `CodeQL: 감지된 ... matrix [...] 적용` 라인이 출력됩니다.
+프로젝트 루트의 마커 파일(`package.json`, `pyproject.toml`, `go.mod`, `pom.xml`,
+`*.csproj`, `Gemfile`, `Package.swift` 등)을 보고 `.github/workflows/security.yml`
+의 `language:` matrix를 자동 갱신합니다. 모노레포처럼 마커가 하위 디렉토리에 있거나
+혼합 스택이라 자동 감지가 누락된 언어가 있으면 [.github/workflows/security.yml](.github/workflows/security.yml)
+의 `matrix.language` 라인을 직접 수정하세요. CodeQL 지원 언어:
+`actions, c-cpp, csharp, go, java-kotlin, javascript-typescript, python, ruby, swift`.
+
 ## 6단계: Git hooks 활성화
 
 ```
