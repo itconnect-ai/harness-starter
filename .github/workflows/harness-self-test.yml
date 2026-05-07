@@ -1,10 +1,9 @@
 name: Harness Self-Test
 
+# Temporarily manual-only: GitHub Actions minutes/plan limit is exhausted.
+# Restore push/pull_request triggers only after CI/CD billing is available again.
 on:
-  pull_request:
-    branches: [main, develop]
-  push:
-    branches: [main, develop]
+  workflow_dispatch:
 
 concurrency:
   group: harness-self-test-${{ github.ref }}

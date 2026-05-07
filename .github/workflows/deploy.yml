@@ -20,10 +20,10 @@
 
 name: Deploy
 
+# Temporarily manual-only: GitHub Actions minutes/plan limit is exhausted.
+# Restore workflow_run only after CI/CD billing is available again.
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
+  workflow_dispatch:
 
 concurrency:
   group: deploy-production

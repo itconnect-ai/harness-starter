@@ -13,13 +13,10 @@
 
 name: Security
 
+# Temporarily manual-only: GitHub Actions minutes/plan limit is exhausted.
+# Restore push/pull_request/schedule triggers only after CI/CD billing is available again.
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
-  schedule:
-    - cron: '0 0 * * 1'  # 매주 월요일 00:00 UTC (09:00 KST)
+  workflow_dispatch:
 
 permissions:
   contents: read

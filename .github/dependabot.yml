@@ -16,7 +16,9 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Seoul"
-    open-pull-requests-limit: 5
+    # Temporarily disabled while GitHub CI/CD plan limit is exhausted.
+    # Restore to 5 after billing/minutes are available again.
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "automated"
@@ -45,7 +47,9 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Seoul"
-    open-pull-requests-limit: 3
+    # Temporarily disabled while GitHub CI/CD plan limit is exhausted.
+    # Restore to 3 after billing/minutes are available again.
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "ci"
@@ -61,7 +65,9 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Seoul"
-    open-pull-requests-limit: 3
+    # Temporarily disabled while GitHub CI/CD plan limit is exhausted.
+    # Restore to 3 after billing/minutes are available again.
+    open-pull-requests-limit: 0
     labels:
       - "dependencies"
       - "docker"

@@ -9,9 +9,10 @@
 
 name: Dependabot Auto-Merge
 
+# Temporarily manual-only: GitHub Actions minutes/plan limit is exhausted.
+# Dependabot version updates are also paused in .github/dependabot.yml.
 on:
-  pull_request:
-    branches: [main, develop]
+  workflow_dispatch:
 
 permissions:
   contents: write
