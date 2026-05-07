@@ -13,6 +13,13 @@
 #   - typecheck는 여기서 하지 않음 — tsc는 프로젝트 단위라 부분 실행 불가,
 #     validate-quick.sh에서 1번만 실행하면 충분 (tsc --incremental 캐시로 빠름)
 #   - 편집할 때마다 풀 typecheck를 돌리면 inner-loop가 outer-loop 시간이 됨
+#
+# 동기/비동기 선택 (.claude/settings.json):
+#   "async": false (현재 기본) — Claude가 lint 완료까지 동기 대기. 즉시 피드백.
+#                                hard cap HARNESS_HOOK_TIMEOUT(기본 60s)으로 보호됨.
+#   "async": true              — Claude는 즉시 다음 작업 진행, lint 결과는 후행 알림.
+#                                대규모 파일 편집 세션에서 누적 대기를 줄이고 싶을 때.
+#   대부분의 경우 async:false가 권장 — 60s cap으로 hang 위험은 이미 차단됨.
 # ============================================================================
 
 # stdin에서 JSON 읽기

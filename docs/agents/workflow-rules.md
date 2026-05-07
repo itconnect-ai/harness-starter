@@ -132,3 +132,35 @@ BMAD 풀코스가 필요 없는 간단한 작업:
 - Phase A validate.sh (Epic 단위) 실패: `--from=실패단계`로 재개, 처음부터 다시 돌리지 않음
 - Phase B 리뷰 거부: Claude Code가 직접 수정
 - 3회 실패: skip 처리하고 수동 확인 대상으로 표시
+
+## Hang/Timeout 가드
+
+validate · smoke · PostToolUse hook의 모든 외부 명령은 hard cap timeout으로
+보호됩니다. 어떤 외부 원인(npm registry hang, vitest watch 모드 진입, eslint
+무한 루프 등)에도 무한 대기가 발생하지 않도록 설계되었습니다.
+
+기본값과 환경변수:
+
+| 단계 | 기본 timeout | 오버라이드 환경변수 |
+|---|---|---|
+| install | 1800s (30m) | `VALIDATE_INSTALL_TIMEOUT` |
+| typecheck | 600s (10m) | `VALIDATE_TYPECHECK_TIMEOUT` |
+| lint | 300s (5m) | `VALIDATE_LINT_TIMEOUT` |
+| test / regression-test / related-tests | 1200s (20m) | `VALIDATE_TEST_TIMEOUT` |
+| build | 1200s (20m) | `VALIDATE_BUILD_TIMEOUT` |
+| 그 외 단계 | 600s (10m) | `VALIDATE_DEFAULT_TIMEOUT` |
+| smoke 전체 | 600s (10m) | `HARNESS_SMOKE_TIMEOUT` |
+| PostToolUse eslint hook | 60s | `HARNESS_HOOK_TIMEOUT` |
+
+`0`을 설정하면 무제한(timeout 없음, 이전 동작). timeout 발동 시 종료 코드 124와
+함께 로그에 `HARNESS TIMEOUT` 메시지가 추가됩니다.
+
+명시적 명령 오버라이드:
+- `HARNESS_TEST_CMD` — validate.sh의 04a test 단계
+- `HARNESS_RELATED_TEST_CMD` — validate-quick의 03 related-tests 단계
+- `HARNESS_REGRESSION_TEST_CMD` — validate.sh의 04b regression 단계
+- `HARNESS_SMOKE_CMD` — smoke 전체
+
+PostToolUse hook은 `.claude/settings.json`의 `async` 속성을 토글해 행동을
+바꿀 수 있습니다(기본 `false` = 즉시 피드백, `true` = 후행 알림). 60s cap이
+이미 hang을 차단하므로 대부분 `false` 유지가 권장.
