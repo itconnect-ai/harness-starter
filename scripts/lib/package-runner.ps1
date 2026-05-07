@@ -97,8 +97,20 @@ function Test-HarnessNodeBin {
 }
 
 function Get-HarnessTestCommand {
+  # 우선순위: HARNESS_TEST_CMD > vitest binary > jest binary > npm run test
+  # binary 직접 호출이 1순위인 이유: package.json의 "test" 스크립트가
+  # "vitest" 단독(인자 없음)이면 watch 모드로 진입해 무한 행 발생.
+  # binary 직접 호출은 항상 run-once 모드를 강제한다.
   if (-not [string]::IsNullOrWhiteSpace($env:HARNESS_TEST_CMD)) {
     return $env:HARNESS_TEST_CMD
+  }
+
+  if (Test-HarnessNodeBin -Name "vitest") {
+    return "npx vitest run"
+  }
+
+  if (Test-HarnessNodeBin -Name "jest") {
+    return "npx jest --runInBand --ci"
   }
 
   return Get-HarnessScriptCommand -ScriptName "test" -OverrideEnvName ""
@@ -114,7 +126,7 @@ function Get-HarnessRegressionTestCommand {
   }
 
   if (Test-HarnessNodeBin -Name "jest") {
-    return "npx jest --testPathPattern=tests/regression/"
+    return "npx jest --runInBand --testPathPattern=tests/regression/"
   }
 
   return $null
@@ -123,19 +135,31 @@ function Get-HarnessRegressionTestCommand {
 function Get-HarnessRelatedTestCommand {
   param(
     [Parameter(Mandatory = $true)]
-    [string]$BaseRef
+    [string]$BaseRef,
+    [string[]]$ChangedFiles = @()
   )
 
   if (-not [string]::IsNullOrWhiteSpace($env:HARNESS_RELATED_TEST_CMD)) {
     return $env:HARNESS_RELATED_TEST_CMD
   }
 
+  $changedJoined = ""
+  if ($ChangedFiles -and $ChangedFiles.Count -gt 0) {
+    $changedJoined = ($ChangedFiles -join " ")
+  }
+
   if (Test-HarnessNodeBin -Name "vitest") {
-    return "npx vitest run --changed $BaseRef --passWithNoTests"
+    if ([string]::IsNullOrWhiteSpace($changedJoined)) {
+      return "npx vitest run"
+    }
+    return "npx vitest related --run --reporter=verbose $changedJoined"
   }
 
   if (Test-HarnessNodeBin -Name "jest") {
-    return "npx jest --changedSince=$BaseRef --passWithNoTests"
+    if ([string]::IsNullOrWhiteSpace($changedJoined)) {
+      return "npx jest --runInBand --passWithNoTests"
+    }
+    return "npx jest --findRelatedTests $changedJoined --passWithNoTests"
   }
 
   return $null

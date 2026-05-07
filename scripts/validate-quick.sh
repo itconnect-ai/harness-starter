@@ -89,11 +89,14 @@ else
   if [ -z "$CHANGED" ]; then
     run_step_skip "03" "related-tests" "no changed source files vs $BASE_REF"
   else
-    TEST_CMD=""
-    if [ -x node_modules/.bin/vitest ]; then
-      TEST_CMD="npx vitest related --run --reporter=verbose $CHANGED"
-    elif [ -x node_modules/.bin/jest ]; then
-      TEST_CMD="npx jest --findRelatedTests $CHANGED --passWithNoTests"
+    # vitest/jest binary 직접 호출 (npm script fallback 없음 — story 단위 빠른 피드백 보장)
+    TEST_CMD="${HARNESS_RELATED_TEST_CMD:-}"
+    if [ -z "$TEST_CMD" ]; then
+      if [ -x node_modules/.bin/vitest ]; then
+        TEST_CMD="npx vitest related --run --reporter=verbose $CHANGED"
+      elif [ -x node_modules/.bin/jest ]; then
+        TEST_CMD="npx jest --findRelatedTests $CHANGED --passWithNoTests"
+      fi
     fi
 
     if [ -z "$TEST_CMD" ]; then

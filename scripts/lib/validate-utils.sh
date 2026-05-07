@@ -22,6 +22,36 @@
 # VALIDATE_OUTPUT_MODE: summary (기본) | verbose
 VALIDATE_OUTPUT_MODE="${VALIDATE_OUTPUT_MODE:-summary}"
 
+# ── 단계별 timeout (초). 0 = 무제한. 환경변수로 오버라이드 가능 ──
+# vitest watch 모드 잘못 진입, npm registry 응답 지연, eslint 무한 루프 등
+# 어떤 외부 원인으로든 무한 행에 빠지지 않도록 하드 캡을 둔다.
+VALIDATE_INSTALL_TIMEOUT="${VALIDATE_INSTALL_TIMEOUT:-1800}"      # 30m
+VALIDATE_TYPECHECK_TIMEOUT="${VALIDATE_TYPECHECK_TIMEOUT:-600}"   # 10m
+VALIDATE_LINT_TIMEOUT="${VALIDATE_LINT_TIMEOUT:-300}"             # 5m
+VALIDATE_TEST_TIMEOUT="${VALIDATE_TEST_TIMEOUT:-1200}"            # 20m
+VALIDATE_BUILD_TIMEOUT="${VALIDATE_BUILD_TIMEOUT:-1200}"          # 20m
+VALIDATE_DEFAULT_TIMEOUT="${VALIDATE_DEFAULT_TIMEOUT:-600}"       # 10m
+
+# timeout 명령 탐지 (Linux: timeout, macOS coreutils: gtimeout)
+HARNESS_TIMEOUT_BIN=""
+if command -v timeout >/dev/null 2>&1; then
+  HARNESS_TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  HARNESS_TIMEOUT_BIN="gtimeout"
+fi
+
+# step_name → 적용할 timeout 초 반환
+get_step_timeout() {
+  case "$1" in
+    install)        echo "$VALIDATE_INSTALL_TIMEOUT" ;;
+    typecheck)      echo "$VALIDATE_TYPECHECK_TIMEOUT" ;;
+    lint)           echo "$VALIDATE_LINT_TIMEOUT" ;;
+    test|regression-test|related-tests) echo "$VALIDATE_TEST_TIMEOUT" ;;
+    build)          echo "$VALIDATE_BUILD_TIMEOUT" ;;
+    *)              echo "$VALIDATE_DEFAULT_TIMEOUT" ;;
+  esac
+}
+
 # ── 로그 디렉터리 ──
 VALIDATE_LOG_DIR=""
 VALIDATE_LOG_LATEST=""
@@ -114,26 +144,52 @@ run_step() {
   step_start=$(date +%s)
 
   local step_exit=0
+  local tmout
+  tmout=$(get_step_timeout "$step_name")
+
+  # timeout 래퍼. HARNESS_TIMEOUT_BIN 부재(Windows Git Bash 등) 또는
+  # tmout=0/빈값이면 무가드 실행. timeout 발동 시 exit 124.
+  local run_with_timeout=""
+  if [ -n "$HARNESS_TIMEOUT_BIN" ] && [ -n "$tmout" ] && [ "$tmout" -gt 0 ]; then
+    run_with_timeout="$HARNESS_TIMEOUT_BIN -k 30s ${tmout}s bash -c"
+  fi
 
   if [ "$VALIDATE_OUTPUT_MODE" = "verbose" ]; then
     # verbose: 실시간 출력 + 로그 파일 저장
     echo ""
     echo "[${step_num}] ${step_name}..."
-    eval "$cmd" 2>&1 | tee "$log_file" || step_exit=${PIPESTATUS[0]}
-    # PIPESTATUS가 안 먹히는 환경 대비
+    if [ -n "$run_with_timeout" ]; then
+      $run_with_timeout "$cmd" 2>&1 | tee "$log_file" || step_exit=${PIPESTATUS[0]}
+    else
+      eval "$cmd" 2>&1 | tee "$log_file" || step_exit=${PIPESTATUS[0]}
+    fi
     if [ $step_exit -eq 0 ] && [ "${PIPESTATUS[0]:-0}" -ne 0 ]; then
       step_exit=${PIPESTATUS[0]}
     fi
   else
     # summary: 로그 파일에만 저장, 콘솔에는 한 줄 요약
     printf "[%s] %-20s " "$step_num" "$step_name"
-    eval "$cmd" > "$log_file" 2>&1
+    if [ -n "$run_with_timeout" ]; then
+      $run_with_timeout "$cmd" > "$log_file" 2>&1
+    else
+      eval "$cmd" > "$log_file" 2>&1
+    fi
     step_exit=$?
   fi
 
   local step_end
   step_end=$(date +%s)
   local elapsed=$((step_end - step_start))
+
+  # exit 124 = timeout 명령의 시간 초과 코드. 별도 메시지를 로그에 추가.
+  if [ "$step_exit" -eq 124 ] && [ -n "$run_with_timeout" ]; then
+    {
+      echo ""
+      echo "── HARNESS TIMEOUT ──────────────────────"
+      echo "  Step exceeded ${tmout}s and was killed by ${HARNESS_TIMEOUT_BIN}."
+      echo "  Tune via env: VALIDATE_*_TIMEOUT (0 = unlimited)."
+    } >> "$log_file" 2>&1
+  fi
 
   if [ $step_exit -eq 0 ]; then
     VALIDATE_PASSED_STEPS=$((VALIDATE_PASSED_STEPS + 1))

@@ -128,17 +128,24 @@ if [ "$SKIP_TEST" = false ]; then
     run_step_skip "04a" "test" "no package.json (template state)"
     run_step_skip "04b" "regression-test" "no package.json (template state)"
   else
-    TEST_CMD=""
-    if grep -q '"test"' package.json 2>/dev/null; then
-      TEST_CMD="npm run test"
-    elif [ -x node_modules/.bin/vitest ]; then
-      TEST_CMD="npx vitest run"
-    elif [ -x node_modules/.bin/jest ]; then
-      TEST_CMD="npx jest --runInBand"
+    # 우선순위: HARNESS_TEST_CMD > vitest binary > jest binary > npm run test
+    # vitest/jest binary 직접 호출이 1순위인 이유:
+    # package.json의 "test" 스크립트가 "vitest" 단독(인자 없음)이면
+    # interactive watch 모드로 진입해 무한 행 발생. binary 직접 호출은
+    # 항상 run-once 모드를 강제한다.
+    TEST_CMD="${HARNESS_TEST_CMD:-}"
+    if [ -z "$TEST_CMD" ]; then
+      if [ -x node_modules/.bin/vitest ]; then
+        TEST_CMD="npx vitest run"
+      elif [ -x node_modules/.bin/jest ]; then
+        TEST_CMD="npx jest --runInBand --ci"
+      elif grep -q '"test"' package.json 2>/dev/null; then
+        TEST_CMD="npm run test"
+      fi
     fi
 
     if [ -z "$TEST_CMD" ]; then
-      run_step_skip "04a" "test" "no test script or local vitest/jest binary"
+      run_step_skip "04a" "test" "no test runner (HARNESS_TEST_CMD/vitest/jest/npm test)"
     else
       run_step "04a" "test" "$TEST_CMD" || exit 1
     fi

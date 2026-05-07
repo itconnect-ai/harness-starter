@@ -55,11 +55,15 @@ try {
   } elseif ([string]::IsNullOrWhiteSpace($baseRef)) {
     Invoke-HarnessStepSkip -StepNumber "03" -StepName "related-tests" -Reason "no base ref found (develop/main)"
   } else {
-    $changed = @(& git diff --name-only $baseRef -- "*.ts" "*.tsx" "*.js" "*.jsx" 2>$null)
+    # 추적 파일 + 미추적 파일 모두 포함 (새로 추가된 .ts 누락 방지)
+    $tracked = @(& git diff --name-only $baseRef -- "*.ts" "*.tsx" "*.js" "*.jsx" 2>$null)
+    $untracked = @(& git ls-files --others --exclude-standard -- "*.ts" "*.tsx" "*.js" "*.jsx" 2>$null)
+    $changed = @($tracked + $untracked) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
     if ($changed.Count -eq 0) {
       Invoke-HarnessStepSkip -StepNumber "03" -StepName "related-tests" -Reason "no changed source files vs $baseRef"
     } else {
-      $related = Get-HarnessRelatedTestCommand -BaseRef $baseRef
+      $related = Get-HarnessRelatedTestCommand -BaseRef $baseRef -ChangedFiles $changed
       if ([string]::IsNullOrWhiteSpace($related)) {
         throw "Story-level validation requires vitest/jest or HARNESS_RELATED_TEST_CMD. Full-suite fallback is intentionally disabled."
       }

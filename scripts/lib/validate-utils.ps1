@@ -9,6 +9,47 @@ $script:ValidateFailedStep = ""
 $script:ValidateFailedCode = 0
 $script:ValidateStartTime = Get-Date
 
+# 단계별 timeout (초). 0 = 무제한. 환경변수로 오버라이드.
+function Get-HarnessStepTimeout {
+  param([Parameter(Mandatory = $true)][string]$StepName)
+
+  $envMap = @{
+    "install"          = "VALIDATE_INSTALL_TIMEOUT"
+    "typecheck"        = "VALIDATE_TYPECHECK_TIMEOUT"
+    "lint"             = "VALIDATE_LINT_TIMEOUT"
+    "test"             = "VALIDATE_TEST_TIMEOUT"
+    "regression-test"  = "VALIDATE_TEST_TIMEOUT"
+    "related-tests"    = "VALIDATE_TEST_TIMEOUT"
+    "build"            = "VALIDATE_BUILD_TIMEOUT"
+  }
+  $defaults = @{
+    "install"          = 1800
+    "typecheck"        = 600
+    "lint"             = 300
+    "test"             = 1200
+    "regression-test"  = 1200
+    "related-tests"    = 1200
+    "build"            = 1200
+  }
+
+  $envName = $envMap[$StepName]
+  if ($envName) {
+    $val = [Environment]::GetEnvironmentVariable($envName)
+    if (-not [string]::IsNullOrWhiteSpace($val)) {
+      $parsed = 0
+      if ([int]::TryParse($val, [ref]$parsed)) { return $parsed }
+    }
+    return $defaults[$StepName]
+  }
+
+  $val = [Environment]::GetEnvironmentVariable("VALIDATE_DEFAULT_TIMEOUT")
+  if (-not [string]::IsNullOrWhiteSpace($val)) {
+    $parsed = 0
+    if ([int]::TryParse($val, [ref]$parsed)) { return $parsed }
+  }
+  return 600
+}
+
 function Get-HarnessRepoRoot {
   $repo = (& git rev-parse --show-toplevel 2>$null)
   if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($repo)) {
@@ -74,8 +115,45 @@ function Invoke-HarnessCommand {
     [Parameter(Mandatory = $true)]
     [string]$Command,
     [Parameter(Mandatory = $true)]
-    [string]$LogFile
+    [string]$LogFile,
+    [int]$TimeoutSeconds = 0
   )
+
+  # timeout 적용: PowerShell Job으로 격리해 hard cap 보장.
+  # vitest watch, eslint 무한 루프, npm registry hang 등 어떤 외부 원인으로도
+  # 영구 행에 빠지지 않도록 한다. 0이면 무가드 실행.
+  if ($TimeoutSeconds -gt 0) {
+    $job = Start-Job -ScriptBlock {
+      param($cmd, $log, $cwd)
+      Set-Location $cwd
+      try {
+        Invoke-Expression $cmd *> $log
+        return [int]$global:LASTEXITCODE
+      } catch {
+        $_ | Out-String | Add-Content -LiteralPath $log
+        return 1
+      }
+    } -ArgumentList $Command, $LogFile, (Get-Location).Path
+
+    $finished = Wait-Job -Job $job -Timeout $TimeoutSeconds
+    if ($null -eq $finished) {
+      Stop-Job -Job $job -ErrorAction SilentlyContinue
+      Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+      Add-Content -LiteralPath $LogFile -Value @"
+
+-- HARNESS TIMEOUT ----------------------
+  Step exceeded ${TimeoutSeconds}s and was killed.
+  Tune via env: VALIDATE_*_TIMEOUT (0 = unlimited).
+"@
+      return 124
+    }
+
+    $exitFromJob = Receive-Job -Job $job -ErrorAction SilentlyContinue
+    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    if ($exitFromJob -is [array]) { $exitFromJob = $exitFromJob[-1] }
+    if ($null -eq $exitFromJob) { return 0 }
+    return [int]$exitFromJob
+  }
 
   $global:LASTEXITCODE = 0
   try {
@@ -116,7 +194,8 @@ function Invoke-HarnessStep {
     Write-Host "[$StepNumber] $StepName..."
   }
 
-  $exitCode = Invoke-HarnessCommand -Command $Command -LogFile $logFile
+  $tmout = Get-HarnessStepTimeout -StepName $StepName
+  $exitCode = Invoke-HarnessCommand -Command $Command -LogFile $logFile -TimeoutSeconds $tmout
   $elapsed = [int]((Get-Date) - $start).TotalSeconds
 
   if ($exitCode -eq 0) {
