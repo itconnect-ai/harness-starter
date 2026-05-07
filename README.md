@@ -210,7 +210,7 @@ fi
 ## 5단계: Harness 파일 설치
 
 ```
-curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.sh -o /tmp/harness-install.sh
+curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-starter/main/scripts/install.sh -o /tmp/harness-install.sh
 bash /tmp/harness-install.sh
 rm -f /tmp/harness-install.sh
 git add -A

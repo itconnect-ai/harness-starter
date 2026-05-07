@@ -10,17 +10,17 @@
 #   - 다른 프로젝트 소스코드와 충돌 위험 최소화
 #
 # 원격 1줄 실행 (target 프로젝트 루트에서):
-#   curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-starter/main/scripts/install.sh | bash
 #
 # 또는 먼저 다운로드 후 확인:
-#   curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.sh -o install.sh
+#   curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-starter/main/scripts/install.sh -o install.sh
 #   bash install.sh --dry-run        # 무엇을 설치할지만 표시
 #   bash install.sh                  # 실제 설치 (기존 파일은 skip)
 #   bash install.sh --force          # 기존 파일 덮어쓰기
 #   bash install.sh --branch develop # 특정 브랜치에서 설치
 #
 # 환경변수:
-#   HARNESS_TEMPLATE_REPO  기본 itconnect-ai/harness-test
+#   HARNESS_TEMPLATE_REPO  기본 itconnect-ai/harness-starter
 #   HARNESS_BRANCH         기본 main
 #   HARNESS_TARGET         기본 $PWD
 #
@@ -30,7 +30,7 @@
 # ============================================================================
 set -e
 
-REPO="${HARNESS_TEMPLATE_REPO:-itconnect-ai/harness-test}"
+REPO="${HARNESS_TEMPLATE_REPO:-itconnect-ai/harness-starter}"
 BRANCH="${HARNESS_BRANCH:-main}"
 TARGET="${HARNESS_TARGET:-$PWD}"
 DRY_RUN=false

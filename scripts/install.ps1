@@ -4,10 +4,10 @@
 # Git Bash는 필요하지 않습니다.
 #
 # 원격 1줄 실행 (PowerShell에서):
-#   iwr https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.ps1 -UseBasicParsing | iex
+#   iwr https://raw.githubusercontent.com/itconnect-ai/harness-starter/main/scripts/install.ps1 -UseBasicParsing | iex
 #
 # 또는 다운로드 후 실행:
-#   iwr https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.ps1 -OutFile install.ps1
+#   iwr https://raw.githubusercontent.com/itconnect-ai/harness-starter/main/scripts/install.ps1 -OutFile install.ps1
 #   .\install.ps1 -DryRun
 #   .\install.ps1
 #   .\install.ps1 -Force
@@ -17,7 +17,7 @@ param(
   [switch]$DryRun,
   [switch]$Force,
   [string]$Branch = "main",
-  [string]$Repo = "itconnect-ai/harness-test",
+  [string]$Repo = "itconnect-ai/harness-starter",
   [string]$Target = $PWD
 )
 

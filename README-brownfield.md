@@ -10,12 +10,12 @@
 
 **bash / WSL / macOS / Linux:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/itconnect-ai/harness-starter/main/scripts/install.sh | bash
 ```
 
 **Windows PowerShell:**
 ```powershell
-iwr https://raw.githubusercontent.com/itconnect-ai/harness-test/main/scripts/install.ps1 -UseBasicParsing | iex
+iwr https://raw.githubusercontent.com/itconnect-ai/harness-starter/main/scripts/install.ps1 -UseBasicParsing | iex
 ```
 
 기본 모드는 기존 파일 skip — 충돌 없이 안전.
