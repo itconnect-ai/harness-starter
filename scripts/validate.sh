@@ -94,7 +94,18 @@ if [ "$SKIP_TYPECHECK" = false ]; then
   if [ "$HAS_PACKAGE_JSON" = false ]; then
     run_step_skip "02" "typecheck" "no package.json (template state)"
   else
-    run_step "02" "typecheck" "npm run typecheck 2>&1 || npx tsc --noEmit 2>&1" || exit 1
+    TYPECHECK_CMD=""
+    if grep -q '"typecheck"' package.json 2>/dev/null; then
+      TYPECHECK_CMD="npm run typecheck"
+    elif [ -f tsconfig.json ] && [ -x node_modules/.bin/tsc ]; then
+      TYPECHECK_CMD="npx tsc --noEmit"
+    fi
+
+    if [ -z "$TYPECHECK_CMD" ]; then
+      run_step_skip "02" "typecheck" "no typecheck script or local tsc binary"
+    else
+      run_step "02" "typecheck" "$TYPECHECK_CMD" || exit 1
+    fi
   fi
 else
   run_step_skip "02" "typecheck" "--from"
@@ -111,19 +122,43 @@ else
   run_step_skip "03" "lint" "--from"
 fi
 
-# ── 4a. 테스트 (순차 실행) ──
+# ── 4a. 테스트 ──
 if [ "$SKIP_TEST" = false ]; then
   if [ "$HAS_PACKAGE_JSON" = false ]; then
     run_step_skip "04a" "test" "no package.json (template state)"
     run_step_skip "04b" "regression-test" "no package.json (template state)"
   else
-    run_step "04a" "test" "npx vitest run --no-threads 2>&1 || npx jest --runInBand 2>&1 || npm run test 2>&1" || exit 1
+    TEST_CMD=""
+    if grep -q '"test"' package.json 2>/dev/null; then
+      TEST_CMD="npm run test"
+    elif [ -x node_modules/.bin/vitest ]; then
+      TEST_CMD="npx vitest run"
+    elif [ -x node_modules/.bin/jest ]; then
+      TEST_CMD="npx jest --runInBand"
+    fi
+
+    if [ -z "$TEST_CMD" ]; then
+      run_step_skip "04a" "test" "no test script or local vitest/jest binary"
+    else
+      run_step "04a" "test" "$TEST_CMD" || exit 1
+    fi
 
     # 4b. Regression 테스트
     if [ -d "tests/regression" ] && [ "$(ls -A tests/regression/ 2>/dev/null)" ]; then
-      run_step "04b" "regression-test" \
-        "npx vitest run --no-threads tests/regression/ 2>&1 || npx jest --runInBand --testPathPattern=tests/regression/ 2>&1 || npm run test -- --testPathPattern=regression 2>&1" \
-        || exit 1
+      REGRESSION_TEST_CMD=""
+      if [ -x node_modules/.bin/vitest ]; then
+        REGRESSION_TEST_CMD="npx vitest run tests/regression/"
+      elif [ -x node_modules/.bin/jest ]; then
+        REGRESSION_TEST_CMD="npx jest --runInBand --testPathPattern=tests/regression/"
+      elif grep -q '"test"' package.json 2>/dev/null; then
+        REGRESSION_TEST_CMD="npm run test -- tests/regression/"
+      fi
+
+      if [ -z "$REGRESSION_TEST_CMD" ]; then
+        run_step_skip "04b" "regression-test" "no supported test runner"
+      else
+        run_step "04b" "regression-test" "$REGRESSION_TEST_CMD" || exit 1
+      fi
     else
       run_step_skip "04b" "regression-test" "no tests/regression/ found"
     fi
@@ -173,9 +208,10 @@ SECURITY_WARNINGS=0
     SECURITY_WARNINGS=$((SECURITY_WARNINGS+1))
   fi
 
-  # docker-compose down -v 패턴
-  if safe_grep_rn "down -v\|down --volumes" scripts/ | grep -vE "scripts/validate\.(sh|ps1):" ; then
-    echo "WARNING: 'docker-compose down -v' found in scripts (destroys DB data)"
+  # destructive docker compose volume deletion pattern
+  DESTRUCTIVE_DOCKER_VOLUME_PATTERN="down -[v]\|down --[v]olumes"
+  if safe_grep_rn "$DESTRUCTIVE_DOCKER_VOLUME_PATTERN" scripts/ ; then
+    echo "WARNING: destructive docker compose volume removal command found in scripts (destroys DB data)"
     SECURITY_WARNINGS=$((SECURITY_WARNINGS+1))
   fi
 

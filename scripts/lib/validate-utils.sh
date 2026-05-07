@@ -26,6 +26,7 @@ VALIDATE_OUTPUT_MODE="${VALIDATE_OUTPUT_MODE:-summary}"
 VALIDATE_LOG_DIR=""
 VALIDATE_LOG_LATEST=""
 VALIDATE_RUN_TYPE=""
+VALIDATE_LATEST_IS_LINK=false
 
 # ── 결과 추적 ──
 VALIDATE_TOTAL_STEPS=0
@@ -70,12 +71,13 @@ init_validate() {
   # latest 심링크 (또는 복사)
   VALIDATE_LOG_LATEST="state/validate/latest"
   rm -rf "$VALIDATE_LOG_LATEST" 2>/dev/null
-  # 심링크 시도, 실패 시 (Windows 등) 경로만 기록
-  if ln -sf "$(basename "$run_dir")" "$VALIDATE_LOG_LATEST" 2>/dev/null; then
-    : # 심링크 성공
+  # 심링크 시도, 실패 시 (Windows 등) finish 단계에서 복사
+  if ln -s "$(basename "$run_dir")" "$VALIDATE_LOG_LATEST" 2>/dev/null && [ -L "$VALIDATE_LOG_LATEST" ]; then
+    VALIDATE_LATEST_IS_LINK=true
   else
-    # Windows에서 심링크 실패 시 디렉터리 직접 사용
-    VALIDATE_LOG_LATEST="$run_dir"
+    rm -rf "$VALIDATE_LOG_LATEST" 2>/dev/null
+    mkdir -p "$VALIDATE_LOG_LATEST"
+    VALIDATE_LATEST_IS_LINK=false
   fi
 
   VALIDATE_LOG_DIR="$run_dir"
@@ -135,6 +137,7 @@ run_step() {
 
   if [ $step_exit -eq 0 ]; then
     VALIDATE_PASSED_STEPS=$((VALIDATE_PASSED_STEPS + 1))
+    sync_latest_logs
     if [ "$VALIDATE_OUTPUT_MODE" = "summary" ]; then
       echo "PASSED (${elapsed}s)"
     else
@@ -143,6 +146,7 @@ run_step() {
   else
     VALIDATE_FAILED_STEP="$step_name"
     VALIDATE_FAILED_CODE=$step_exit
+    sync_latest_logs
     if [ "$VALIDATE_OUTPUT_MODE" = "summary" ]; then
       echo "FAILED (${elapsed}s)"
       print_failure_summary "$step_num" "$step_name" "$step_exit" "$log_file"
@@ -172,6 +176,20 @@ run_step_skip() {
     echo ""
     echo "[${step_num}] ${step_name}... SKIPPED (${reason})"
   fi
+}
+
+sync_latest_logs() {
+  if [ "$VALIDATE_LATEST_IS_LINK" = true ]; then
+    return 0
+  fi
+
+  if [ -z "$VALIDATE_LOG_LATEST" ] || [ "$VALIDATE_LOG_LATEST" = "$VALIDATE_LOG_DIR" ]; then
+    return 0
+  fi
+
+  mkdir -p "$VALIDATE_LOG_LATEST"
+  cp -a "${VALIDATE_LOG_DIR}/." "$VALIDATE_LOG_LATEST/" 2>/dev/null || \
+    cp -R "${VALIDATE_LOG_DIR}/." "$VALIDATE_LOG_LATEST/" 2>/dev/null || true
 }
 
 # ============================================================================
@@ -224,6 +242,7 @@ finish_validate() {
   local end_time
   end_time=$(date +%s)
   local total_elapsed=$((end_time - VALIDATE_START_TIME))
+  sync_latest_logs
 
   echo ""
   if [ -n "$VALIDATE_FAILED_STEP" ]; then

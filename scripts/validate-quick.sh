@@ -82,16 +82,18 @@ if [ ! -f package.json ]; then
 elif [ -z "$BASE_REF" ]; then
   run_step_skip "03" "related-tests" "no base ref found (develop/main)"
 else
-  CHANGED=$(git diff --name-only "$BASE_REF" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null | tr '\n' ' ')
+  TRACKED_CHANGED=$(git diff --name-only "$BASE_REF" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null || true)
+  UNTRACKED_CHANGED=$(git ls-files --others --exclude-standard -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null || true)
+  CHANGED=$(printf "%s\n%s\n" "$TRACKED_CHANGED" "$UNTRACKED_CHANGED" | sed '/^$/d' | tr '\n' ' ')
 
   if [ -z "$CHANGED" ]; then
     run_step_skip "03" "related-tests" "no changed source files vs $BASE_REF"
   else
     TEST_CMD=""
     if [ -x node_modules/.bin/vitest ]; then
-      TEST_CMD="npx vitest run --changed $BASE_REF --reporter=verbose"
+      TEST_CMD="npx vitest related --run --reporter=verbose $CHANGED"
     elif [ -x node_modules/.bin/jest ]; then
-      TEST_CMD="npx jest --changedSince=$BASE_REF --passWithNoTests"
+      TEST_CMD="npx jest --findRelatedTests $CHANGED --passWithNoTests"
     fi
 
     if [ -z "$TEST_CMD" ]; then
