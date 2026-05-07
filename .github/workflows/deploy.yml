@@ -52,7 +52,7 @@ jobs:
       # ── 배포 전 DB 백업 (docs/agents/backup-rules.md 참조) ──
       # 서버에 접속해 backup.sh 실행 후 계속 진행. 실패 시 배포 중단.
       # - name: Pre-deploy DB backup
-      #   uses: appleboy/ssh-action@v1.0.3
+      #   uses: appleboy/ssh-action@v1.2.5
       #   with:
       #     host: ${{ secrets.DEPLOY_HOST }}
       #     username: ${{ secrets.DEPLOY_USER }}
@@ -63,7 +63,7 @@ jobs:
 
       # ── 옵션 A: SSH로 서버에 접속해 git pull + docker compose ──
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -80,7 +80,7 @@ jobs:
       # ── 배포 후 smoke test ──
       # 서버에서 health endpoint + critical path 확인
       # - name: Post-deploy smoke test
-      #   uses: appleboy/ssh-action@v1.0.3
+      #   uses: appleboy/ssh-action@v1.2.5
       #   with:
       #     host: ${{ secrets.DEPLOY_HOST }}
       #     username: ${{ secrets.DEPLOY_USER }}
