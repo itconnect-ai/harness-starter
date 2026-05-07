@@ -67,6 +67,18 @@ esac
 # ── 초기화 ──
 init_validate "epic"
 
+# 조기 종료(예: run_step ... || exit 1)에도 요약·로그 경로가 출력되도록
+# EXIT trap에 finalize 등록. exit code는 trap이 보존(side-effect만 수행).
+HARNESS_FINALIZE_DONE=false
+__harness_finalize_once() {
+  if [ "$HARNESS_FINALIZE_DONE" = true ]; then
+    return 0
+  fi
+  HARNESS_FINALIZE_DONE=true
+  finish_validate || true
+}
+trap __harness_finalize_once EXIT
+
 if [ -n "${1:-}" ]; then
   echo " Resuming from: ${1#--from=}"
   echo ""
@@ -344,4 +356,4 @@ else
 fi
 
 # ── 완료 ──
-finish_validate
+__harness_finalize_once
