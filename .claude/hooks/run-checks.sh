@@ -58,9 +58,33 @@ if [ ! -f "$relative_path" ]; then
   exit 0
 fi
 
-# 변경된 파일만 lint (전체 프로젝트 lint보다 훨씬 빠름)
-lint_output=$(npx eslint "$relative_path" 2>&1)
-lint_exit=$?
+# 변경된 파일만 lint (전체 프로젝트 lint보다 훨씬 빠름).
+# eslint 캐시(.eslintcache)로 재실행 비용을 줄이고, timeout으로 hang을 막는다.
+# 이 hook은 settings.json에서 async:false라 Claude 세션 전체를 블로킹할 수 있다 —
+# eslint config 순환/플러그인 hang 시 hard cap으로 자동 종료해 흐름 보호.
+HARNESS_HOOK_TIMEOUT="${HARNESS_HOOK_TIMEOUT:-60}"
+HARNESS_TIMEOUT_BIN=""
+if command -v timeout >/dev/null 2>&1; then
+  HARNESS_TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  HARNESS_TIMEOUT_BIN="gtimeout"
+fi
+
+mkdir -p node_modules/.cache/eslint 2>/dev/null || true
+
+if [ -n "$HARNESS_TIMEOUT_BIN" ] && [ "$HARNESS_HOOK_TIMEOUT" -gt 0 ]; then
+  lint_output=$($HARNESS_TIMEOUT_BIN -k 5s "${HARNESS_HOOK_TIMEOUT}s" \
+    npx eslint --cache --cache-location node_modules/.cache/eslint/ "$relative_path" 2>&1)
+  lint_exit=$?
+  if [ $lint_exit -eq 124 ]; then
+    echo "WARN: eslint hook exceeded ${HARNESS_HOOK_TIMEOUT}s on $relative_path — skipped." >&2
+    echo "  Tune via env: HARNESS_HOOK_TIMEOUT (0 = unlimited). Check eslint config for circular extends." >&2
+    exit 0
+  fi
+else
+  lint_output=$(npx eslint --cache --cache-location node_modules/.cache/eslint/ "$relative_path" 2>&1)
+  lint_exit=$?
+fi
 
 if [ $lint_exit -ne 0 ]; then
   echo "Lint failed on $relative_path:" >&2
