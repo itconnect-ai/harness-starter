@@ -302,6 +302,57 @@ function Get-HarnessSearchFiles {
     return @()
   }
 
+  # 우선 git ls-files를 시도 — .gitignore를 자동 적용해 node_modules 등 노이즈를
+  # 사전 제거. Get-ChildItem -Recurse는 모든 파일을 enumerate한 뒤 사후 필터라
+  # 대형 monorepo에서 분 단위 소요. git 기반은 수 초 이내.
+  # git이 없거나 저장소가 아니면 Get-ChildItem fallback (이전 동작과 동일).
+  $gitOK = $false
+  try {
+    & git rev-parse --is-inside-work-tree *> $null
+    if ($LASTEXITCODE -eq 0) { $gitOK = $true }
+  } catch {
+    $gitOK = $false
+  }
+
+  if ($gitOK) {
+    $tracked = @()
+    $untracked = @()
+    try {
+      $tracked = @(& git ls-files -- $Path 2>$null)
+      $untracked = @(& git ls-files --others --exclude-standard -- $Path 2>$null)
+    } catch {
+      # git 호출 실패 시 fallback 경로로 전환
+      $gitOK = $false
+    }
+
+    if ($gitOK) {
+      $allPaths = @($tracked + $untracked) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+
+      # 확장자 필터 (Include 패턴 "*.ts" → 접미사 ".ts" 비교)
+      $suffixes = $Include | ForEach-Object { $_.TrimStart('*') }
+      $matched = $allPaths | Where-Object {
+        $candidate = $_
+        $hit = $false
+        foreach ($suf in $suffixes) {
+          if ($candidate.EndsWith($suf, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $hit = $true
+            break
+          }
+        }
+        $hit
+      }
+
+      # FileInfo로 변환 (Select-String이 .FullName/.Path를 사용).
+      # 삭제된 파일은 Get-Item이 null을 반환하므로 사후 필터링.
+      return $matched |
+        ForEach-Object { Get-Item -LiteralPath $_ -ErrorAction SilentlyContinue } |
+        Where-Object { $null -ne $_ }
+    }
+  }
+
+  # Fallback: Get-ChildItem with noise filter
   $noise = @(
     ".git", "node_modules", ".venv", "venv", "dist", "build", "coverage",
     ".next", ".turbo", ".cache", ".tmp", "playwright-report", "test-results",
